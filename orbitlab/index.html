@@ -1,0 +1,3388 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OrbitLab — Simulador de Missão Orbital</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,600;9..144,700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<style>
+  :root {
+    --bg-0: #05070b;
+    --bg-1: #0a0e14;
+    --bg-2: #0f141c;
+    --bg-3: #151c26;
+    --line: #1e2733;
+    --line-bright: #2a3646;
+    --text: #e6e8ec;
+    --text-dim: #8b95a3;
+    --text-faint: #4a5361;
+    --phos: #9dd6b4;
+    --phos-bright: #c8efd8;
+    --amber: #f4b860;
+    --amber-bright: #ffd38a;
+    --coral: #e85d75;
+    --blue: #6fa8dc;
+    --violet: #a78bfa;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; overflow: hidden; }
+  body {
+    background: var(--bg-0);
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 400;
+    letter-spacing: 0.01em;
+    user-select: none;
+  }
+  .app {
+    display: grid;
+    grid-template-rows: 44px 1fr;
+    height: 100vh;
+    width: 100vw;
+  }
+  header {
+    display: flex;
+    align-items: center;
+    padding: 0 18px;
+    background: var(--bg-1);
+    border-bottom: 1px solid var(--line);
+    gap: 24px;
+  }
+  header .brand {
+    font-family: 'Fraunces', serif;
+    font-weight: 600;
+    font-size: 18px;
+    letter-spacing: -0.02em;
+    color: var(--text);
+  }
+  header .brand em {
+    font-style: italic;
+    color: var(--phos);
+    font-weight: 400;
+  }
+  header .tag {
+    font-size: 9px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+    padding: 3px 8px;
+    border: 1px solid var(--line-bright);
+    border-radius: 2px;
+  }
+  header .clock {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+  header .clock b {
+    color: var(--phos);
+    font-weight: 500;
+  }
+  header .status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 9px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+  }
+  header .status .dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--phos);
+    box-shadow: 0 0 8px var(--phos);
+    animation: pulse 1.8s infinite;
+  }
+  header .status.pre .dot { background: var(--amber); box-shadow: 0 0 8px var(--amber); }
+  header .status.flight .dot { background: var(--phos); box-shadow: 0 0 8px var(--phos); }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+  .layout {
+    display: grid;
+    height: calc(100vh - 44px);
+    gap: 0;
+  }
+  .layout[data-view="split"] {
+    grid-template-columns: 310px 1fr 310px;
+    grid-template-rows: 1fr 220px;
+  }
+  .layout[data-view="split"] aside.left { grid-row: 1 / 3; }
+  .layout[data-view="split"] .panel-orbit { grid-column: 2; grid-row: 1; }
+  .layout[data-view="split"] .panel-attitude { grid-column: 3; grid-row: 1; display: flex; }
+  .layout[data-view="split"] .panel-ground { grid-column: 2 / 4; grid-row: 2; display: flex; }
+  .layout[data-view="split"] .panel-power { display: none; }
+
+  .layout[data-view="mission"] {
+    grid-template-columns: 310px 1fr;
+    grid-template-rows: 1fr 280px;
+  }
+  .layout[data-view="mission"] aside.left { grid-row: 1 / 3; }
+  .layout[data-view="mission"] .panel-orbit { grid-column: 2; grid-row: 1; }
+  .layout[data-view="mission"] .panel-attitude { display: none; }
+  .layout[data-view="mission"] .panel-ground { grid-column: 2; grid-row: 2; display: flex; }
+  .layout[data-view="mission"] .panel-power { display: none; }
+
+  .layout[data-view="attitude"] {
+    grid-template-columns: 310px 1fr;
+    grid-template-rows: 1fr;
+  }
+  .layout[data-view="attitude"] aside.left { grid-row: 1; }
+  .layout[data-view="attitude"] .panel-orbit { display: none; }
+  .layout[data-view="attitude"] .panel-ground { display: none; }
+  .layout[data-view="attitude"] .panel-attitude { grid-column: 2; grid-row: 1; display: flex; }
+  .layout[data-view="attitude"] .panel-power { display: none; }
+
+  .layout[data-view="power"] {
+    grid-template-columns: 310px 1fr;
+    grid-template-rows: 1fr;
+  }
+  .layout[data-view="power"] aside.left { grid-row: 1; }
+  .layout[data-view="power"] .panel-orbit { display: none; }
+  .layout[data-view="power"] .panel-ground { display: none; }
+  .layout[data-view="power"] .panel-attitude { display: none; }
+  .layout[data-view="power"] .panel-power { grid-column: 2; grid-row: 1; display: flex; }
+
+  .view-mode {
+    display: flex;
+    gap: 2px;
+    margin-left: 18px;
+  }
+  .view-mode .vm {
+    background: var(--bg-2);
+    border: 1px solid var(--line-bright);
+    color: var(--text-dim);
+    padding: 5px 12px;
+    font-size: 9px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    cursor: pointer;
+    font-family: 'JetBrains Mono', monospace;
+    border-radius: 2px;
+    font-weight: 500;
+    transition: all 0.15s;
+  }
+  .view-mode .vm:hover { color: var(--phos); border-color: var(--phos); }
+  .view-mode .vm.active {
+    background: var(--phos);
+    color: var(--bg-0);
+    border-color: var(--phos);
+  }
+  aside.left {
+    background: var(--bg-1);
+    border-right: 1px solid var(--line);
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+  .panel-orbit { position: relative; background: var(--bg-0); }
+  .panel-attitude { background: var(--bg-1); border-left: 1px solid var(--line); flex-direction: column; }
+  .panel-ground { background: var(--bg-1); border-top: 1px solid var(--line); flex-direction: column; }
+  .panel-power { background: var(--bg-1); flex-direction: column; overflow: hidden; }
+  .power-body {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 0;
+    overflow: hidden;
+  }
+  .pw-col {
+    display: flex;
+    flex-direction: column;
+    padding: 14px 16px;
+    border-right: 1px solid var(--line);
+    overflow: hidden;
+  }
+  .pw-col:last-child { border-right: none; }
+  .pw-lbl {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    color: var(--text-faint);
+    margin-bottom: 10px;
+  }
+  .pw-canvas {
+    flex: 1;
+    width: 100%;
+    min-height: 180px;
+    background: var(--bg-0);
+    border: 1px solid var(--line);
+    border-radius: 2px;
+  }
+  .pw-readout {
+    margin-top: 10px;
+    font-size: 10px;
+  }
+  .pr-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 3px 0;
+    border-bottom: 1px dashed var(--line);
+  }
+  .pr-row:last-child { border-bottom: none; }
+  .pr-row span { color: var(--text-dim); }
+  .pr-row b { color: var(--phos); font-weight: 500; }
+  .pw-stats {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 10px;
+    flex: 1;
+    justify-content: center;
+  }
+  .ps {
+    display: flex;
+    justify-content: space-between;
+    padding: 5px 0;
+    border-bottom: 1px dashed var(--line);
+  }
+  .ps span { color: var(--text-dim); }
+  .ps b { color: var(--amber); font-weight: 500; }
+
+  .section {
+    border-bottom: 1px solid var(--line);
+    padding: 14px 16px;
+  }
+  .section h3 {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+    font-weight: 500;
+    margin-bottom: 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .section h3 .num {
+    color: var(--phos);
+    font-family: 'Fraunces', serif;
+    font-style: italic;
+    font-size: 14px;
+    letter-spacing: 0;
+    text-transform: none;
+  }
+  .section h2 {
+    font-family: 'Fraunces', serif;
+    font-size: 15px;
+    font-weight: 400;
+    color: var(--text);
+    margin-bottom: 2px;
+    letter-spacing: -0.01em;
+  }
+  .section h2 em { color: var(--phos); font-style: italic; }
+  .section .desc {
+    font-size: 9px;
+    color: var(--text-faint);
+    letter-spacing: 0.05em;
+    line-height: 1.4;
+    margin-bottom: 12px;
+  }
+
+  label.field {
+    display: block;
+    margin-bottom: 10px;
+  }
+  label.field span {
+    display: flex;
+    justify-content: space-between;
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 3px;
+  }
+  label.field span em {
+    color: var(--phos);
+    font-style: normal;
+    font-family: 'JetBrains Mono', monospace;
+    letter-spacing: 0;
+  }
+  label.field input[type="number"],
+  label.field input[type="text"],
+  label.field select {
+    width: 100%;
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    padding: 5px 7px;
+    border-radius: 2px;
+    outline: none;
+  }
+  label.field input:focus, label.field select:focus {
+    border-color: var(--phos);
+  }
+  label.field input[type="range"] {
+    width: 100%;
+    accent-color: var(--phos);
+  }
+  .row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+
+  button.btn {
+    background: var(--bg-2);
+    border: 1px solid var(--line-bright);
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 7px 10px;
+    border-radius: 2px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  button.btn:hover { border-color: var(--phos); color: var(--phos); }
+  button.btn.primary {
+    background: var(--phos);
+    color: var(--bg-0);
+    border-color: var(--phos);
+    font-weight: 600;
+  }
+  button.btn.primary:hover {
+    background: var(--phos-bright);
+    color: var(--bg-0);
+  }
+  button.btn.danger { border-color: var(--coral); color: var(--coral); }
+  button.btn.danger:hover { background: var(--coral); color: var(--bg-0); }
+  .btn-row { display: flex; gap: 6px; }
+  .btn-row button { flex: 1; }
+
+  .elements-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1px;
+    background: var(--line);
+    border: 1px solid var(--line);
+  }
+  .el {
+    background: var(--bg-2);
+    padding: 7px 9px;
+  }
+  .el .k {
+    font-size: 8px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+    margin-bottom: 2px;
+  }
+  .el .k em { color: var(--amber); font-style: italic; font-family: 'Fraunces', serif; font-size: 11px; text-transform: none; letter-spacing: 0; margin-right: 3px; }
+  .el .v {
+    font-size: 12px;
+    color: var(--phos);
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+  }
+  .el .u {
+    font-size: 9px;
+    color: var(--text-dim);
+    margin-left: 4px;
+  }
+
+  canvas.full {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+  .overlay {
+    position: absolute;
+    font-size: 9px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+    pointer-events: none;
+  }
+  .overlay.tl { top: 14px; left: 18px; }
+  .overlay.tr { top: 14px; right: 18px; text-align: right; }
+  .overlay.bl { bottom: 14px; left: 18px; }
+  .overlay.br { bottom: 14px; right: 18px; text-align: right; }
+  .overlay b { color: var(--phos); font-weight: 500; letter-spacing: 0; font-size: 10px; font-family: 'JetBrains Mono', monospace; text-transform: none; }
+  .overlay .big {
+    font-family: 'Fraunces', serif;
+    font-style: italic;
+    font-size: 22px;
+    color: var(--text);
+    letter-spacing: -0.01em;
+    text-transform: none;
+    margin-bottom: 2px;
+    font-weight: 300;
+  }
+  .corners::before, .corners::after,
+  .corners > .c1::before, .corners > .c1::after {
+    content: '';
+    position: absolute;
+    width: 10px; height: 10px;
+    border-color: var(--line-bright);
+    border-style: solid;
+  }
+  .corners::before { top: 8px; left: 8px; border-width: 1px 0 0 1px; }
+  .corners::after { top: 8px; right: 8px; border-width: 1px 1px 0 0; }
+  .corners > .c1::before { bottom: 8px; left: 8px; border-width: 0 0 1px 1px; }
+  .corners > .c1::after { bottom: 8px; right: 8px; border-width: 0 1px 1px 0; }
+
+  .panel-header {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--line);
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+  .panel-header h4 {
+    font-family: 'Fraunces', serif;
+    font-size: 13px;
+    font-weight: 400;
+    color: var(--text);
+    letter-spacing: -0.01em;
+  }
+  .panel-header h4 em { color: var(--phos); font-style: italic; }
+  .panel-header .meta {
+    font-size: 9px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+  }
+
+  .att-body {
+    flex: 1;
+    position: relative;
+    background: var(--bg-0);
+    min-height: 0;
+  }
+  .att-readout {
+    padding: 10px 14px;
+    border-top: 1px solid var(--line);
+    background: var(--bg-1);
+  }
+  .att-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 10px;
+    padding: 2px 0;
+  }
+  .att-row .k { color: var(--text-dim); }
+  .att-row .v { color: var(--phos); font-variant-numeric: tabular-nums; }
+
+  .ground-body { flex: 1; position: relative; min-height: 0; }
+
+  .preset-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px;
+    margin-top: 6px;
+  }
+  .preset {
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    padding: 6px 8px;
+    font-size: 9px;
+    letter-spacing: 0.05em;
+    cursor: pointer;
+    color: var(--text-dim);
+    transition: all 0.15s;
+    border-radius: 2px;
+  }
+  .preset:hover { border-color: var(--phos); color: var(--phos); }
+  .preset.active { border-color: var(--phos); color: var(--phos); background: rgba(157,214,180,0.06); }
+  .preset .site { font-weight: 600; color: var(--text); }
+  .preset:hover .site, .preset.active .site { color: var(--phos-bright); }
+  .preset .coord { color: var(--text-faint); font-size: 8px; margin-top: 2px; }
+
+  .toggle-row {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 8px;
+  }
+  .toggle-row .tg {
+    flex: 1;
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    padding: 5px;
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    text-align: center;
+    cursor: pointer;
+    color: var(--text-dim);
+    border-radius: 2px;
+  }
+  .toggle-row .tg.active { border-color: var(--phos); color: var(--phos); background: rgba(157,214,180,0.08); }
+
+  .badge {
+    display: inline-block;
+    font-size: 8px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    padding: 2px 6px;
+    border-radius: 2px;
+    border: 1px solid var(--line-bright);
+    color: var(--text-dim);
+  }
+  .badge.ok { border-color: var(--phos); color: var(--phos); }
+  .badge.warn { border-color: var(--amber); color: var(--amber); }
+
+  /* scrollbar */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg-1); }
+  ::-webkit-scrollbar-thumb { background: var(--line-bright); border-radius: 0; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--text-faint); }
+
+  .gg-legend {
+    position: absolute;
+    bottom: 10px; left: 14px;
+    font-size: 9px;
+    color: var(--text-faint);
+    letter-spacing: 0.05em;
+  }
+  .gg-legend div { margin: 2px 0; }
+  .gg-legend .sw { display: inline-block; width: 10px; height: 2px; margin-right: 6px; vertical-align: middle; }
+
+  .boom-control {
+    margin-top: 8px;
+    padding: 10px;
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    border-radius: 2px;
+  }
+  .boom-control .title {
+    display: flex;
+    justify-content: space-between;
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--text-dim);
+    margin-bottom: 6px;
+  }
+  .boom-control .title b { color: var(--phos); font-weight: 500; letter-spacing: 0; text-transform: none; font-size: 10px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="brand">orbit<em>Lab</em></div>
+    <div class="tag">Mission Dynamics Console</div>
+    <div class="view-mode" id="view-mode">
+      <button class="vm active" data-view="split">Split</button>
+      <button class="vm" data-view="mission">Missão</button>
+      <button class="vm" data-view="attitude">Atitude</button>
+      <button class="vm" data-view="power">Energia</button>
+    </div>
+    <div class="clock">
+      <span>T+<b id="mission-time">00:00:00</b></span>
+      <span>ACCEL<b id="time-rate">×1</b></span>
+      <div class="status pre" id="status-ind"><span class="dot"></span><span id="status-txt">Pré-lançamento</span></div>
+    </div>
+  </header>
+  <div class="layout" id="main-layout" data-view="split">
+
+    <aside class="left">
+      <div class="section">
+        <h2>Configuração da <em>Missão</em></h2>
+        <div class="desc">Parametrize o sítio de lançamento e os elementos orbitais de inserção. A propagação usa J2 + WGS84.</div>
+      </div>
+
+      <div class="section">
+        <h3>Sítio de Lançamento <span class="num">01</span></h3>
+        <div class="preset-grid" id="launch-presets"></div>
+        <div class="row-2" style="margin-top: 10px;">
+          <label class="field">
+            <span>Latitude <em id="lat-val">−2.373</em></span>
+            <input type="number" id="launch-lat" value="-2.373" step="0.001">
+          </label>
+          <label class="field">
+            <span>Longitude <em id="lon-val">−44.397</em></span>
+            <input type="number" id="launch-lon" value="-44.397" step="0.001">
+          </label>
+        </div>
+      </div>
+
+      <div class="section">
+        <h3>Época de Lançamento <span class="num">02</span></h3>
+        <div class="desc" style="font-size:9px; margin-bottom:8px;">
+          Data/hora UTC do lançamento. Define GMST (θ⊕ inicial), posição do sol no ECI, estação do ano — afeta eclipses, iluminação dos painéis e longitude geográfica do ground track.
+        </div>
+        <label class="field">
+          <span>Data/hora UTC</span>
+          <input type="datetime-local" id="launch-epoch" step="60" style="width:100%; padding: 6px 8px; font-size: 10px;">
+        </label>
+        <div style="display:flex; gap:4px; margin-top: 8px; flex-wrap:wrap;">
+          <button class="btn" id="btn-epoch-now" style="padding:4px 8px; font-size:8px; flex:1;">Agora (UTC)</button>
+          <button class="btn" id="btn-epoch-sols-jun" style="padding:4px 8px; font-size:8px; flex:1;">Solstício jun</button>
+          <button class="btn" id="btn-epoch-sols-dez" style="padding:4px 8px; font-size:8px; flex:1;">Solstício dez</button>
+        </div>
+        <div class="elements-grid" style="margin-top:8px;">
+          <div class="el"><div class="k">JD</div><div class="v"><span id="ep-jd">—</span></div></div>
+          <div class="el"><div class="k">GMST</div><div class="v"><span id="ep-gmst">—</span>°</div></div>
+          <div class="el"><div class="k">δ☉ (declinação)</div><div class="v"><span id="ep-sundecl">—</span>°</div></div>
+          <div class="el"><div class="k">β (β-angle)</div><div class="v"><span id="ep-beta">—</span>°</div></div>
+        </div>
+      </div>
+
+      <div class="section">
+        <h3>Órbita Alvo <span class="num">03</span></h3>
+        <label class="field">
+          <span>Altitude do apogeu <em id="alt-val">600</em> km</span>
+          <input type="range" id="alt" min="200" max="36000" value="600" step="10">
+        </label>
+        <label class="field">
+          <span>Inclinação <em id="inc-val">51.6</em>°</span>
+          <input type="range" id="inc" min="0" max="180" value="51.6" step="0.1">
+        </label>
+        <label class="field">
+          <span>Excentricidade <em id="ecc-val">0.0012</em></span>
+          <input type="range" id="ecc" min="0" max="0.2" value="0.0012" step="0.0001">
+        </label>
+        <div class="row-2">
+          <label class="field">
+            <span>RAAN Ω <em id="raan-val">0</em>°</span>
+            <input type="number" id="raan" value="0" step="0.1">
+          </label>
+          <label class="field">
+            <span>Arg. perigeu ω <em id="argp-val">0</em>°</span>
+            <input type="number" id="argp" value="0" step="0.1">
+          </label>
+        </div>
+        <label class="field">
+          <span>Anomalia verdadeira ν <em id="nu-val">0</em>°</span>
+          <input type="number" id="nu" value="0" step="0.1">
+        </label>
+      </div>
+
+      <div class="section">
+        <h3>Simulação <span class="num">04</span></h3>
+        <div class="toggle-row" id="rate-toggle">
+          <div class="tg" data-rate="1">×1</div>
+          <div class="tg active" data-rate="60">×60</div>
+          <div class="tg" data-rate="600">×600</div>
+          <div class="tg" data-rate="3600">×3600</div>
+        </div>
+        <div class="btn-row" style="margin-top: 8px;">
+          <button class="btn primary" id="btn-launch">▶ Lançar</button>
+          <button class="btn" id="btn-pause">Pausa</button>
+          <button class="btn danger" id="btn-reset">Reset</button>
+        </div>
+      </div>
+
+      <div class="section">
+        <h3>Elementos em Tempo Real <span class="num">05</span></h3>
+        <div class="elements-grid">
+          <div class="el"><div class="k"><em>a</em> Semi-maior eixo</div><div class="v"><span id="el-a">—</span><span class="u">km</span></div></div>
+          <div class="el"><div class="k"><em>e</em> Excentricidade</div><div class="v"><span id="el-e">—</span></div></div>
+          <div class="el"><div class="k"><em>i</em> Inclinação</div><div class="v"><span id="el-i">—</span><span class="u">°</span></div></div>
+          <div class="el"><div class="k"><em>Ω</em> RAAN</div><div class="v"><span id="el-raan">—</span><span class="u">°</span></div></div>
+          <div class="el"><div class="k"><em>ω</em> Arg. perigeu</div><div class="v"><span id="el-argp">—</span><span class="u">°</span></div></div>
+          <div class="el"><div class="k"><em>ν</em> Anom. verdadeira</div><div class="v"><span id="el-nu">—</span><span class="u">°</span></div></div>
+          <div class="el"><div class="k">Altitude</div><div class="v"><span id="el-alt">—</span><span class="u">km</span></div></div>
+          <div class="el"><div class="k">Velocidade</div><div class="v"><span id="el-vel">—</span><span class="u">km/s</span></div></div>
+          <div class="el"><div class="k">Período</div><div class="v"><span id="el-per">—</span><span class="u">min</span></div></div>
+          <div class="el"><div class="k">Lat / Lon</div><div class="v" style="font-size:10px;"><span id="el-latlon">—</span></div></div>
+        </div>
+      </div>
+
+      <div class="section">
+        <h3>Atitude — Gradiente de Gravidade <span class="num">06</span></h3>
+        <div class="desc">Estabilização passiva por torque ∇g. Estabilidade requer <em>I</em>₂ &gt; <em>I</em>₁ &gt; <em>I</em>₃ (nadir).</div>
+
+        <div class="row-3">
+          <label class="field">
+            <span>I₁ (roll)</span>
+            <input type="number" id="i1" value="350" step="10">
+          </label>
+          <label class="field">
+            <span>I₂ (pitch)</span>
+            <input type="number" id="i2" value="400" step="10">
+          </label>
+          <label class="field">
+            <span>I₃ (nadir)</span>
+            <input type="number" id="i3" value="50" step="5">
+          </label>
+        </div>
+        <div class="boom-control">
+          <div class="title"><span>Boom deployment</span><b id="boom-l-val">0.0 m</b></div>
+          <input type="range" id="boom-l" min="0" max="15" value="0" step="0.1" style="width:100%;accent-color:var(--phos);">
+          <div class="title" style="margin-top:8px;"><span>Massa da ponta</span><b id="boom-m-val">8 kg</b></div>
+          <input type="range" id="boom-m" min="1" max="30" value="8" step="1" style="width:100%;accent-color:var(--phos);">
+        </div>
+        <div style="margin-top:10px; display:flex; gap:6px; align-items:center;">
+          <span class="badge" id="stab-badge">— estabilidade —</span>
+          <span style="color:var(--text-faint); font-size:9px;">pitch / roll-yaw</span>
+        </div>
+        <label class="field" style="margin-top:10px;">
+          <span>Perturbação angular inicial <em id="pert-val">5</em>°</span>
+          <input type="range" id="pert" min="0" max="45" value="5" step="1">
+        </label>
+      </div>
+
+      <div class="section">
+        <h3>Torquers magnéticos <span class="num">07</span></h3>
+        <div class="toggle-row">
+          <div class="tg active" data-magmode="off">Off</div>
+          <div class="tg" data-magmode="manual">Manual</div>
+          <div class="tg" data-magmode="bdot">B-dot</div>
+        </div>
+        <div style="font-size: 9px; color: var(--text-faint); line-height: 1.4; margin-top: 6px;">
+          Dipolo magnético axial · B₀ = 31 μT (eq. superfície) · τ = m × B
+        </div>
+        <div class="inertia-grid" style="margin-top:8px;">
+          <label class="field">
+            <span>m_x (A·m²)</span>
+            <input type="number" id="mag-mx" value="0" step="5">
+          </label>
+          <label class="field">
+            <span>m_y</span>
+            <input type="number" id="mag-my" value="0" step="5">
+          </label>
+          <label class="field">
+            <span>m_z</span>
+            <input type="number" id="mag-mz" value="0" step="5">
+          </label>
+        </div>
+        <label class="field" style="margin-top:8px;">
+          <span>Saturação |m|max <em id="mag-max-val">100</em> A·m²</span>
+          <input type="range" id="mag-mmax" min="10" max="500" value="100" step="10" style="width:100%;accent-color:var(--amber);">
+        </label>
+        <label class="field" style="margin-top:6px;">
+          <span>B-dot gain <em id="mag-k-val">1×10⁷</em></span>
+          <input type="range" id="mag-k" min="50" max="90" value="70" step="1" style="width:100%;accent-color:var(--amber);">
+        </label>
+        <div class="elements-grid" style="margin-top:8px;">
+          <div class="el"><div class="k">|B|</div><div class="v"><span id="mag-B">—</span> nT</div></div>
+          <div class="el"><div class="k">|τ_mag|</div><div class="v"><span id="mag-T">—</span> µNm</div></div>
+          <div class="el"><div class="k">|m|</div><div class="v"><span id="mag-m">—</span> Am²</div></div>
+          <div class="el"><div class="k">|ω|</div><div class="v"><span id="mag-w">—</span> °/s</div></div>
+        </div>
+      </div>
+
+      <div class="section">
+        <h3>Controle de atitude <span class="num">08</span></h3>
+        <div class="toggle-row">
+          <div class="tg active" data-ctrlmode="off">Off</div>
+          <div class="tg" data-ctrlmode="pd">PD Nadir</div>
+        </div>
+        <div style="font-size: 9px; color: var(--text-faint); line-height: 1.4; margin-top: 6px;">
+          Reaction wheels · τ = −Kp·q_err − Kd·ω · alvo: −z_body → Terra
+        </div>
+        <label class="field" style="margin-top:8px;">
+          <span>Kp <em id="ctrl-kp-val">0.50</em> N·m</span>
+          <input type="range" id="ctrl-kp" min="0.05" max="3.0" step="0.05" value="0.5" style="width:100%;accent-color:var(--phos);">
+        </label>
+        <label class="field" style="margin-top:4px;">
+          <span>Kd <em id="ctrl-kd-val">8.0</em> N·m·s</span>
+          <input type="range" id="ctrl-kd" min="0.5" max="50" step="0.5" value="8" style="width:100%;accent-color:var(--phos);">
+        </label>
+        <label class="field" style="margin-top:4px;">
+          <span>τ_max <em id="ctrl-tmax-val">0.150</em> N·m</span>
+          <input type="range" id="ctrl-tmax" min="0.01" max="1.0" step="0.01" value="0.15" style="width:100%;accent-color:var(--phos);">
+        </label>
+        <div class="elements-grid" style="margin-top:8px;">
+          <div class="el"><div class="k">err_nadir</div><div class="v"><span id="ctrl-err">—</span>°</div></div>
+          <div class="el"><div class="k">|τ_rw|</div><div class="v"><span id="ctrl-tau">—</span> mNm</div></div>
+          <div class="el"><div class="k">P_rw</div><div class="v"><span id="ctrl-prw">—</span> W</div></div>
+          <div class="el"><div class="k">E_rw</div><div class="v"><span id="ctrl-erw">—</span> Wh</div></div>
+        </div>
+      </div>
+
+      <div class="section">
+        <h3>Perturbações <span class="num">09</span></h3>
+        <div class="toggle-row">
+          <div class="tg active" data-pert="j2">J₂</div>
+          <div class="tg" data-pert="kepler">Kepleriano</div>
+        </div>
+        <div style="font-size: 9px; color: var(--text-faint); line-height: 1.5; margin-top: 6px;">
+          J₂ = 1.08263 × 10⁻³ · μ = 398600.4418 km³/s² · R⊕ = 6378.137 km (WGS84). Integração RK4 em ECI com passo adaptativo ao time-rate.
+        </div>
+      </div>
+    </aside>
+
+    <div class="panel-orbit corners">
+      <div class="c1"></div>
+      <canvas id="orbit-canvas" class="full"></canvas>
+      <div class="overlay tl">
+        <div class="big">Visão Inercial — <em style="color:var(--phos); font-style:italic;">ECI</em></div>
+        <div>Terra + satélite · frame J2000-like</div>
+      </div>
+      <div class="overlay tr">
+        <div>R<b id="r-mag">—</b> km</div>
+        <div>V<b id="v-mag">—</b> km/s</div>
+      </div>
+      <div class="overlay bl">
+        <div id="phase-label">FASE · <b id="phase">Pré-lançamento</b></div>
+      </div>
+      <div class="overlay br" style="font-size:8px; line-height:1.6;">
+        <div>▸ Trilha orbital (último período)</div>
+        <div>▸ Eixo rotação · terminador solar</div>
+      </div>
+    </div>
+
+    <div class="panel-attitude">
+      <div class="panel-header">
+        <h4>Atitude <em>do satélite</em></h4>
+        <span class="meta">Euler · Quaternion</span>
+      </div>
+      <div class="att-body corners">
+        <div class="c1"></div>
+        <canvas id="attitude-canvas" class="full"></canvas>
+        <div class="gg-legend">
+          <div><span class="sw" style="background:var(--coral);"></span>Nadir (ẑ_orbital)</div>
+          <div><span class="sw" style="background:var(--phos);"></span>Velocidade (x̂_orbital)</div>
+          <div><span class="sw" style="background:var(--amber);"></span>Normal orbital (ŷ)</div>
+        </div>
+      </div>
+      <div class="att-readout">
+        <div class="att-row"><span class="k">Roll · φ</span><span class="v"><span id="att-roll">—</span>°</span></div>
+        <div class="att-row"><span class="k">Pitch · θ</span><span class="v"><span id="att-pitch">—</span>°</span></div>
+        <div class="att-row"><span class="k">Yaw · ψ</span><span class="v"><span id="att-yaw">—</span>°</span></div>
+        <div class="att-row"><span class="k">‖ω‖ body</span><span class="v"><span id="att-w">—</span> °/s</span></div>
+        <div class="att-row"><span class="k">Erro apontamento nadir</span><span class="v"><span id="att-err">—</span>°</span></div>
+      </div>
+    </div>
+
+    <div class="panel-ground">
+      <div class="panel-header">
+        <h4>Ground <em>track</em></h4>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <span class="meta">ECEF · WGS84</span>
+          <div class="toggle-row" style="margin:0; gap:2px;">
+            <div class="tg active" data-proj="mercator" style="padding:4px 9px; font-size:8px;">Mercator</div>
+            <div class="tg" data-proj="equirect" style="padding:4px 9px; font-size:8px;">Equiret.</div>
+          </div>
+          <button class="btn" id="btn-clear-track" style="padding:4px 8px; font-size:8px;">Limpar</button>
+        </div>
+      </div>
+      <div class="ground-body corners">
+        <div class="c1"></div>
+        <canvas id="ground-canvas" class="full"></canvas>
+      </div>
+    </div>
+
+    <div class="panel-power">
+      <div class="panel-header">
+        <h4>Energia <em>& Iluminação</em></h4>
+        <div style="display:flex; gap:10px; align-items:center;">
+          <div class="toggle-row" style="margin:0; gap:2px;">
+            <div class="tg" data-panelcfg="fixed_pm_y" style="padding:4px 9px; font-size:8px;">Fixo ±Y</div>
+            <div class="tg" data-panelcfg="fixed_5face" style="padding:4px 9px; font-size:8px;">5 faces</div>
+            <div class="tg active" data-panelcfg="sada_1dof_y" style="padding:4px 9px; font-size:8px;">SADA 1-DOF</div>
+          </div>
+          <span id="eclipse-badge" class="badge">—</span>
+          <span id="imaging-badge" class="badge">—</span>
+        </div>
+      </div>
+      <div class="power-body">
+        <!-- coluna 1: diagrama angular do sol + painéis (canvas 2D) -->
+        <div class="pw-col">
+          <div class="pw-lbl">Incidência solar nos painéis</div>
+          <canvas id="solar-canvas" class="pw-canvas"></canvas>
+          <div class="pw-readout">
+            <div class="pr-row"><span>Painel +Y</span><b id="p-py">— W</b></div>
+            <div class="pr-row"><span>Painel −Y</span><b id="p-my">— W</b></div>
+            <div class="pr-row"><span>Total</span><b id="p-total">— W</b></div>
+          </div>
+        </div>
+        <!-- coluna 2: strip chart de energia -->
+        <div class="pw-col">
+          <div class="pw-lbl">Bateria & potência (janela ≈ 4h sim)</div>
+          <canvas id="battery-canvas" class="pw-canvas"></canvas>
+          <div class="pw-readout">
+            <div class="pr-row"><span>SoC bateria</span><b id="p-soc">—</b></div>
+            <div class="pr-row"><span>P_gerada</span><b id="p-gen">— W</b></div>
+            <div class="pr-row"><span>P_carga</span><b id="p-load">— W</b></div>
+          </div>
+        </div>
+        <!-- coluna 3: balanço energético -->
+        <div class="pw-col">
+          <div class="pw-lbl">Balanço energético da missão</div>
+          <div class="pw-stats">
+            <div class="ps"><span>E_wheels</span><b id="ps-ew">0.00 Wh</b></div>
+            <div class="ps"><span>E_mag torquers</span><b id="ps-em">0.00 Wh</b></div>
+            <div class="ps"><span>E_apontamento (total)</span><b id="ps-ecorr">0.00 Wh</b></div>
+            <div class="ps"><span>Imaging uptime</span><b id="ps-imguptime">—</b></div>
+            <div class="ps"><span>Eclipse (% órbita)</span><b id="ps-eclfrac">—</b></div>
+            <div class="ps" style="border-top:1px solid var(--line-bright); margin-top:6px; padding-top:8px;">
+              <span>Custo /órbita</span><b id="ps-costorb">—</b>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+/* ===================================================================
+   OrbitLab — Simulador de missão orbital com J2 + gradiente de gravidade
+   =================================================================== */
+
+/* ------------------- constantes físicas (WGS84 + gravitacional) */
+const MU   = 398600.4418;       // km^3/s^2
+const RE   = 6378.137;          // km (equatorial WGS84)
+const J2   = 1.08262668e-3;
+const F    = 1/298.257223563;   // WGS84 flattening
+const E2   = F*(2-F);           // excentricidade² elipsóide
+const OMEGA_EARTH = 7.2921159e-5; // rad/s (sidereal)
+const DEG = Math.PI/180;
+const RAD = 180/Math.PI;
+
+/* ============ EFEMÉRIDES — tempo & posição do sol ============
+   Referências:
+   - GMST: IAU 1982 / Vallado "Fundamentals of Astrodynamics" eq. 3-45
+   - Sol: low-precision solar position (Montenbruck & Gill, Sec 3.3.2)
+     precisão ~0.01° em longitude — suficiente p/ eclipse & incidência
+   ============================================================== */
+const J2000_JD = 2451545.0;  // 2000-01-01 12:00:00 UTC
+
+// Data de calendário → Julian Date (Fliegel & Van Flandern, válido 1900-2100)
+function calendarToJD(y, m, d, h, mi, s){
+  const a = Math.floor((14 - m)/12);
+  const yr = y + 4800 - a;
+  const mo = m + 12*a - 3;
+  const jdn = d + Math.floor((153*mo + 2)/5) + 365*yr + Math.floor(yr/4)
+            - Math.floor(yr/100) + Math.floor(yr/400) - 32045;
+  const fracDay = (h - 12)/24 + mi/1440 + s/86400;
+  return jdn + fracDay;
+}
+
+// GMST em radianos dado JD (UT1 ≈ UTC aqui, erro < 1s)
+function gmstFromJD(jd){
+  // Vallado eq. 3-45: GMST em segundos
+  const T = (jd - J2000_JD) / 36525;  // séculos julianos desde J2000
+  let gmst_s = 67310.54841
+             + (876600*3600 + 8640184.812866)*T
+             + 0.093104*T*T
+             - 6.2e-6*T*T*T;
+  // reduzir ao intervalo [0, 86400)
+  gmst_s = ((gmst_s % 86400) + 86400) % 86400;
+  return 2*Math.PI * gmst_s / 86400;
+}
+
+// Vetor sol em ECI (unitário) dado JD — low-precision Montenbruck
+function sunVectorECI(jd){
+  const d = jd - J2000_JD;  // dias desde J2000
+  // longitude média do sol (graus)
+  const L = ((280.460 + 0.9856474*d) % 360 + 360) % 360;
+  // anomalia média do sol (graus)
+  const g = (((357.528 + 0.9856003*d) % 360 + 360) % 360) * DEG;
+  // longitude eclíptica
+  const lam = (L + 1.915*Math.sin(g) + 0.020*Math.sin(2*g)) * DEG;
+  // obliquidade da eclíptica
+  const eps = (23.439 - 0.0000004*d) * DEG;
+  return [
+    Math.cos(lam),
+    Math.cos(eps)*Math.sin(lam),
+    Math.sin(eps)*Math.sin(lam)
+  ];
+}
+
+// Helper: JD atual da simulação = JD de época + t_sim/86400
+function currentJD(){
+  return sim.epochJD + sim.t / 86400;
+}
+
+/* ============ álgebra vetorial simples (arrays) ============ */
+const V = {
+  add:(a,b)=>[a[0]+b[0],a[1]+b[1],a[2]+b[2]],
+  sub:(a,b)=>[a[0]-b[0],a[1]-b[1],a[2]-b[2]],
+  scl:(a,s)=>[a[0]*s,a[1]*s,a[2]*s],
+  dot:(a,b)=>a[0]*b[0]+a[1]*b[1]+a[2]*b[2],
+  cross:(a,b)=>[a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]],
+  mag:(a)=>Math.sqrt(a[0]*a[0]+a[1]*a[1]+a[2]*a[2]),
+  norm:(a)=>{const m=V.mag(a); return m===0?[0,0,0]:[a[0]/m,a[1]/m,a[2]/m];}
+};
+
+/* ============ keplerian -> state vector (ECI) ============ */
+function kepToState(a, e, i, raan, argp, nu){
+  const p = a*(1-e*e);
+  const r = p/(1+e*Math.cos(nu));
+  // perifocal
+  const rp = [r*Math.cos(nu), r*Math.sin(nu), 0];
+  const vp = [-Math.sqrt(MU/p)*Math.sin(nu), Math.sqrt(MU/p)*(e+Math.cos(nu)), 0];
+  // rotação perifocal -> ECI: R3(-Ω) R1(-i) R3(-ω)
+  const cO=Math.cos(raan), sO=Math.sin(raan);
+  const ci=Math.cos(i),    si=Math.sin(i);
+  const cw=Math.cos(argp), sw=Math.sin(argp);
+  const R = [
+    [cO*cw - sO*sw*ci,  -cO*sw - sO*cw*ci,  sO*si],
+    [sO*cw + cO*sw*ci,  -sO*sw + cO*cw*ci, -cO*si],
+    [sw*si,              cw*si,              ci]
+  ];
+  const mul = (M, v) => [
+    M[0][0]*v[0]+M[0][1]*v[1]+M[0][2]*v[2],
+    M[1][0]*v[0]+M[1][1]*v[1]+M[1][2]*v[2],
+    M[2][0]*v[0]+M[2][1]*v[1]+M[2][2]*v[2]
+  ];
+  return {r: mul(R, rp), v: mul(R, vp)};
+}
+
+/* ============ state vector -> elementos clássicos ============ */
+function stateToKep(r, v){
+  const rmag = V.mag(r), vmag = V.mag(v);
+  const h = V.cross(r,v), hmag = V.mag(h);
+  const n = [-h[1], h[0], 0]; const nmag = V.mag(n);
+  const evec = V.scl(V.sub(V.scl(r, vmag*vmag - MU/rmag), V.scl(v, V.dot(r,v))), 1/MU);
+  const e = V.mag(evec);
+  const energy = vmag*vmag/2 - MU/rmag;
+  const a = -MU/(2*energy);
+  const i = Math.acos(Math.max(-1, Math.min(1, h[2]/hmag)));
+  let raan = 0;
+  if(nmag > 1e-10){
+    raan = Math.acos(Math.max(-1, Math.min(1, n[0]/nmag)));
+    if(n[1] < 0) raan = 2*Math.PI - raan;
+  }
+  let argp = 0;
+  if(nmag > 1e-10 && e > 1e-10){
+    argp = Math.acos(Math.max(-1, Math.min(1, V.dot(n,evec)/(nmag*e))));
+    if(evec[2] < 0) argp = 2*Math.PI - argp;
+  }
+  let nu = 0;
+  if(e > 1e-10){
+    nu = Math.acos(Math.max(-1, Math.min(1, V.dot(evec,r)/(e*rmag))));
+    if(V.dot(r,v) < 0) nu = 2*Math.PI - nu;
+  } else {
+    // circular: use angle from node
+    nu = Math.acos(Math.max(-1, Math.min(1, V.dot(n,r)/(nmag*rmag))));
+    if(r[2] < 0) nu = 2*Math.PI - nu;
+  }
+  const T = 2*Math.PI*Math.sqrt(a*a*a/MU);
+  return { a, e, i, raan, argp, nu, T, rmag, vmag };
+}
+
+/* ============ aceleração (2-corpos + J2) ============ */
+function accel(r, useJ2){
+  const rmag = V.mag(r);
+  const r3 = rmag*rmag*rmag;
+  const a = V.scl(r, -MU/r3);
+  if(useJ2){
+    const zr2 = (r[2]*r[2])/(rmag*rmag);
+    const k = 1.5 * J2 * MU * RE*RE / (r3*rmag*rmag);
+    const ax = k * r[0] * (5*zr2 - 1);
+    const ay = k * r[1] * (5*zr2 - 1);
+    const az = k * r[2] * (5*zr2 - 3);
+    a[0] += ax; a[1] += ay; a[2] += az;
+  }
+  return a;
+}
+
+/* ============ RK4 um passo ============ */
+function rk4Step(r, v, dt, useJ2){
+  const k1v = accel(r, useJ2);
+  const k1r = v;
+
+  const r2 = V.add(r, V.scl(k1r, dt/2));
+  const v2 = V.add(v, V.scl(k1v, dt/2));
+  const k2v = accel(r2, useJ2);
+  const k2r = v2;
+
+  const r3 = V.add(r, V.scl(k2r, dt/2));
+  const v3 = V.add(v, V.scl(k2v, dt/2));
+  const k3v = accel(r3, useJ2);
+  const k3r = v3;
+
+  const r4 = V.add(r, V.scl(k3r, dt));
+  const v4 = V.add(v, V.scl(k3v, dt));
+  const k4v = accel(r4, useJ2);
+  const k4r = v4;
+
+  const rnew = V.add(r, V.scl(V.add(V.add(k1r, V.scl(k2r,2)), V.add(V.scl(k3r,2), k4r)), dt/6));
+  const vnew = V.add(v, V.scl(V.add(V.add(k1v, V.scl(k2v,2)), V.add(V.scl(k3v,2), k4v)), dt/6));
+  return {r: rnew, v: vnew};
+}
+
+/* ============ ECI -> ECEF via GMST (aqui: θ = ω⊕ · t) ============ */
+function eciToEcef(r, theta){
+  const c=Math.cos(theta), s=Math.sin(theta);
+  return [ c*r[0] + s*r[1], -s*r[0] + c*r[1], r[2] ];
+}
+
+/* ============ ECEF -> geodética (WGS84, Bowring) ============ */
+function ecefToGeo(r){
+  const x=r[0], y=r[1], z=r[2];
+  const lon = Math.atan2(y, x);
+  const p = Math.sqrt(x*x + y*y);
+  // iteração simples
+  let lat = Math.atan2(z, p*(1-E2));
+  for(let k=0; k<5; k++){
+    const N = RE/Math.sqrt(1 - E2*Math.sin(lat)*Math.sin(lat));
+    lat = Math.atan2(z + E2*N*Math.sin(lat), p);
+  }
+  const N = RE/Math.sqrt(1 - E2*Math.sin(lat)*Math.sin(lat));
+  const alt = p/Math.cos(lat) - N;
+  return { lat: lat*RAD, lon: lon*RAD, alt };
+}
+
+/* ============ geodética -> ECEF (p/ sítios de lançamento) ============ */
+function geoToEcef(lat, lon, alt=0){
+  lat*=DEG; lon*=DEG;
+  const N = RE/Math.sqrt(1 - E2*Math.sin(lat)*Math.sin(lat));
+  return [
+    (N+alt)*Math.cos(lat)*Math.cos(lon),
+    (N+alt)*Math.cos(lat)*Math.sin(lon),
+    (N*(1-E2)+alt)*Math.sin(lat)
+  ];
+}
+
+/* ==================================================
+   DINÂMICA DE ATITUDE — equações de Euler + quaternion
+   corpo rígido com inércia principal diag(I1, I2, I3)
+   torque de gradiente de gravidade: Tgg = 3μ/R³ (ĉ × I·ĉ)
+   ================================================== */
+
+/* quaternion: [w, x, y, z], scalar-first */
+const Q = {
+  mul:(a,b)=>[
+    a[0]*b[0]-a[1]*b[1]-a[2]*b[2]-a[3]*b[3],
+    a[0]*b[1]+a[1]*b[0]+a[2]*b[3]-a[3]*b[2],
+    a[0]*b[2]-a[1]*b[3]+a[2]*b[0]+a[3]*b[1],
+    a[0]*b[3]+a[1]*b[2]-a[2]*b[1]+a[3]*b[0]
+  ],
+  conj:(q)=>[q[0],-q[1],-q[2],-q[3]],
+  norm:(q)=>{const m=Math.sqrt(q[0]*q[0]+q[1]*q[1]+q[2]*q[2]+q[3]*q[3]); return [q[0]/m,q[1]/m,q[2]/m,q[3]/m];},
+  // rotar vetor v pelo quaternion q (ativo)
+  rot:(q,v)=>{
+    const qv=[0,v[0],v[1],v[2]];
+    const r = Q.mul(Q.mul(q, qv), Q.conj(q));
+    return [r[1],r[2],r[3]];
+  },
+  // q a partir de eixo-ângulo
+  fromAxisAngle:(ax, ang)=>{
+    const h=ang/2, s=Math.sin(h);
+    const m=V.mag(ax);
+    return [Math.cos(h), ax[0]/m*s, ax[1]/m*s, ax[2]/m*s];
+  },
+  // quaternion -> ângulos de Euler (3-2-1: yaw, pitch, roll)
+  toEuler:(q)=>{
+    const [w,x,y,z]=q;
+    const roll  = Math.atan2(2*(w*x+y*z), 1-2*(x*x+y*y));
+    const sp    = Math.max(-1, Math.min(1, 2*(w*y-z*x)));
+    const pitch = Math.asin(sp);
+    const yaw   = Math.atan2(2*(w*z+x*y), 1-2*(y*y+z*z));
+    return {roll, pitch, yaw};
+  }
+};
+
+/* ==================================================
+   CAMPO GEOMAGNÉTICO — dipolo axial (simplificação IGRF)
+   m̂ ≈ −ẑ (norte magnético do dipolo no hemisfério sul geográfico)
+   |m| ≈ 8.0 × 10²² A·m² ⇒ campo equatorial na superfície ≈ 31 μT
+   ================================================== */
+const B_SURF_EQ = 3.12e-5;  // T (campo no equador na superfície)
+
+function magneticFieldECI(r_eci){
+  const rmag = V.mag(r_eci);
+  const rhat = V.norm(r_eci);
+  const m_hat = [0, 0, -1];
+  const factor = B_SURF_EQ * Math.pow(RE/rmag, 3);
+  const mdotr = V.dot(m_hat, rhat);
+  // B = B0·(R⊕/r)³·[3(m̂·r̂)r̂ − m̂]
+  return V.scl(V.sub(V.scl(rhat, 3*mdotr), m_hat), factor);
+}
+
+/* Torque magnético: T = m × B (no frame do corpo)
+   Modos: 'off' | 'manual' | 'bdot' (controle de detumble) */
+function computeMagneticTorque(r_eci, q_BO, xOrb, yOrb, zOrb, cfg, dt){
+  const B_eci = magneticFieldECI(r_eci);
+  // ECI → LVLH
+  const B_LVLH = [V.dot(xOrb, B_eci), V.dot(yOrb, B_eci), V.dot(zOrb, B_eci)];
+  // LVLH → body (q rotaciona orbital → body)
+  const B_body = Q.rot(q_BO, B_LVLH);
+  sim.B_body_cur = B_body;
+
+  let m_body = [0, 0, 0];  // momento magnético do torquer [A·m²]
+  if(cfg.magMode === 'manual'){
+    m_body = [cfg.magMx, cfg.magMy, cfg.magMz];
+  } else if(cfg.magMode === 'bdot' && sim.B_body_prev){
+    const dB = V.sub(B_body, sim.B_body_prev);
+    const dBdt = V.scl(dB, 1/Math.max(dt, 1e-6));
+    m_body = V.scl(dBdt, -cfg.kBdot);
+  }
+  // saturação do torquer (limite físico)
+  const mMag = V.mag(m_body);
+  if(mMag > cfg.mMax){
+    m_body = V.scl(V.norm(m_body), cfg.mMax);
+  }
+  sim.B_body_prev = B_body;
+  sim.m_cmd_body = m_body;
+
+  // T = m × B
+  return V.cross(m_body, B_body);
+}
+
+/* deriva da atitude: retorna [dq/dt, dω/dt]
+   T_ext: torque externo no body frame (e.g. magnético) — tratado como constante no passo */
+function attitudeDerivative(q, omega, I, c_body, n_orb, T_ext){
+  // torque gradiente de gravidade (c_body = direção ao centro da Terra no frame do corpo)
+  const Ic = [I[0]*c_body[0], I[1]*c_body[1], I[2]*c_body[2]];
+  const Tgg_coef = 3 * n_orb*n_orb;  // usando n = mean motion
+  const cxIc = V.cross(c_body, Ic);
+  const Tgg = V.scl(cxIc, Tgg_coef);
+  // torque total = gravidade + externos (magnético, etc.)
+  const Tx = Tgg[0] + (T_ext ? T_ext[0] : 0);
+  const Ty = Tgg[1] + (T_ext ? T_ext[1] : 0);
+  const Tz = Tgg[2] + (T_ext ? T_ext[2] : 0);
+  // Euler eqs (principal): I_i * dω_i/dt + (I_k - I_j) * ω_j * ω_k = T_i
+  const dwx = (Tx - (I[2]-I[1])*omega[1]*omega[2]) / I[0];
+  const dwy = (Ty - (I[0]-I[2])*omega[2]*omega[0]) / I[1];
+  const dwz = (Tz - (I[1]-I[0])*omega[0]*omega[1]) / I[2];
+  // kinemática quaternion
+  const [w,x,y,z] = q;
+  const [wx,wy,wz] = omega;
+  const dq = [
+    -0.5*(x*wx + y*wy + z*wz),
+     0.5*(w*wx + y*wz - z*wy),
+     0.5*(w*wy + z*wx - x*wz),
+     0.5*(w*wz + x*wy - y*wx)
+  ];
+  return { dq, dw: [dwx, dwy, dwz] };
+}
+
+/* passo RK4 da atitude */
+function attitudeStep(q, omega, I, dt, c_body_fn, n_orb, T_ext){
+  // precisamos de c_body em função do estado; usaremos estimativa simples usando q atual para sub-passos
+  const eval_ = (qi, wi) => {
+    const c = c_body_fn(qi);
+    return attitudeDerivative(qi, wi, I, c, n_orb, T_ext);
+  };
+  const k1 = eval_(q, omega);
+  const q2 = q.map((v,i)=>v + k1.dq[i]*dt/2);
+  const w2 = omega.map((v,i)=>v + k1.dw[i]*dt/2);
+  const k2 = eval_(q2, w2);
+  const q3 = q.map((v,i)=>v + k2.dq[i]*dt/2);
+  const w3 = omega.map((v,i)=>v + k2.dw[i]*dt/2);
+  const k3 = eval_(q3, w3);
+  const q4 = q.map((v,i)=>v + k3.dq[i]*dt);
+  const w4 = omega.map((v,i)=>v + k3.dw[i]*dt);
+  const k4 = eval_(q4, w4);
+  const qn = q.map((v,i)=>v + (k1.dq[i]+2*k2.dq[i]+2*k3.dq[i]+k4.dq[i])*dt/6);
+  const wn = omega.map((v,i)=>v + (k1.dw[i]+2*k2.dw[i]+2*k3.dw[i]+k4.dw[i])*dt/6);
+  return { q: Q.norm(qn), omega: wn };
+}
+
+/* =============================================================
+   ESTADO GLOBAL DA SIMULAÇÃO
+   ============================================================= */
+const sim = {
+  phase: 'pre', // 'pre' | 'launch' | 'orbit'
+  t: 0,          // s desde início da simulação
+  tLaunch: 0,    // s desde T0 do lançamento
+  running: false,
+  rate: 60,
+  lastWall: performance.now(),
+
+  // config
+  cfg: {
+    lat: -2.373, lon: -44.397,  // Alcântara default
+    alt: 600, inc: 51.6, ecc: 0.0012,
+    raan: 0, argp: 0, nu: 0,
+    useJ2: true,
+    // === controle magnético ===
+    magMode: 'off',   // 'off' | 'manual' | 'bdot'
+    magMx: 0,
+    magMy: 0,
+    magMz: 0,
+    kBdot: 1e7,
+    mMax: 100,
+    // === controle de atitude (reaction wheels PD) ===
+    ctrlMode: 'off',  // 'off' | 'pd'
+    ctrlKp: 0.5,      // proporcional — ganho sobre q_err_vec [N·m]
+    ctrlKd: 8.0,      // derivativo — ganho sobre ω [N·m·s/rad]
+    ctrlTmax: 0.15,   // saturação de torque das wheels [N·m]
+    // === sistema de potência ===
+    panelArea: 1.5,     // m² por painel (unidade base)
+    panelEff: 0.28,     // eficiência célula tripla-junção
+    panelConfig: 'sada_1dof_y',  // 'fixed_pm_y' | 'fixed_5face' | 'sada_1dof_y'
+    battCap: 80,        // Wh capacidade nominal
+    powerBaseline: 40,  // W consumo OBC/comms/térmico
+    powerImaging: 80,   // W adicional em modo imaging
+    imagingMaxErr: 3.0  // erro de apontamento (°) máximo p/ imaging OK
+  },
+
+  // magnetic state
+  B_body_cur: [0,0,0],
+  B_body_prev: null,
+  m_cmd_body: [0,0,0],
+  T_mag_cur: [0,0,0],
+  T_wheel_cur: [0,0,0],
+
+  // energy state
+  E_wheel: 0,        // Wh consumidos pelas wheels (cumulativo)
+  E_mag: 0,          // Wh consumidos pelos torquers
+  P_wheel_cur: 0,    // W atual
+  P_mag_cur: 0,
+  batt_soc: 0.65,    // estado de carga 0-1 (inicia em 65%)
+  batt_hist: [],     // histórico pra plot (últimos N pontos)
+  power_hist: [],    // histórico de P_gen e P_load
+  inEclipse: false,
+  sunVec_body: [0,0,1],  // versor sol no body frame
+  P_gen_cur: 0,
+  P_panel: [0,0],     // potência por painel [+Y, -Y]
+  imagingOK: false,   // flag: apontamento bom p/ imaging
+
+  // state
+  r: [0,0,0], v: [0,0,0],
+  kep: null,
+  trail: [],     // últimos pontos ECI
+  groundTrail: [], // pontos lat/lon
+
+  // atitude
+  q: [1,0,0,0],
+  omega: [0,0,0],
+  I: [350, 400, 50],  // principais
+  boomL: 0,           // boom length (m)
+  boomM: 8,           // tip mass (kg)
+  boomAxis: [0,0,1],  // eixo do boom no corpo (z-body)
+  pertAng: 5*DEG,
+
+  // epoch (data/hora UTC do lançamento)
+  epochJD: calendarToJD(2026, 4, 22, 12, 0, 0),  // default: hoje 12:00 UTC
+
+  // launch visuals
+  launchPath: null,
+  launchDuration: 540, // s total (~9 min)
+
+  // ground track
+  groundProj: 'mercator',        // 'mercator' | 'equirect'
+  groundTrailMax: 50000,         // persistência longa (≈300+ órbitas LEO)
+};
+
+/* ========= sítios de lançamento ========= */
+const LAUNCH_SITES = [
+  { name: 'Alcântara', country: 'BR', lat: -2.373,  lon: -44.397 },
+  { name: 'Cape Canaveral', country: 'US', lat: 28.573, lon: -80.649 },
+  { name: 'Kourou (CSG)', country: 'ESA', lat: 5.239, lon: -52.768 },
+  { name: 'Baikonur', country: 'KZ', lat: 45.965, lon: 63.305 },
+  { name: 'Vandenberg', country: 'US', lat: 34.742, lon: -120.572 },
+  { name: 'Tanegashima', country: 'JP', lat: 30.400, lon: 130.969 },
+];
+
+/* =============================================================
+   SETUP THREE.JS — VISTA ORBITAL
+   ============================================================= */
+const orbitCanvas = document.getElementById('orbit-canvas');
+const orbitRenderer = new THREE.WebGLRenderer({ canvas: orbitCanvas, antialias: true, alpha: true });
+orbitRenderer.setPixelRatio(window.devicePixelRatio);
+const orbitScene = new THREE.Scene();
+const orbitCam = new THREE.PerspectiveCamera(45, 1, 100, 500000);
+orbitCam.position.set(0, -25000, 12000);
+orbitCam.up.set(0, 0, 1);
+orbitCam.lookAt(0,0,0);
+
+// iluminação
+orbitScene.add(new THREE.AmbientLight(0x404860, 0.4));
+const sunLight = new THREE.DirectionalLight(0xfff3d8, 1.2);
+sunLight.position.set(200000, 0, 0);
+orbitScene.add(sunLight);
+
+/* ============================================================
+   DADOS GEOGRÁFICOS — contornos de continentes em [lat, lon]
+   (usados tanto para a textura procedural da Terra quanto p/ ground track)
+   Coordenadas simplificadas mas razoavelmente fiéis a Natural Earth 1:110m
+   ============================================================ */
+const COASTLINES = {
+  africa: [[36,-5],[35,-2],[37,3],[37,9],[33,11],[33,22],[31,25],[31,30],[31,34],[28,34],[24,37],[17,39],[12,43],[11,51],[5,49],[0,42],[-4,40],[-10,40],[-17,39],[-22,35],[-26,33],[-30,31],[-34,26],[-34,19],[-32,18],[-29,17],[-23,14],[-17,12],[-12,13],[-7,12],[-5,12],[-1,9],[3,10],[4,5],[4,-2],[5,-4],[6,-7],[8,-13],[11,-15],[14,-17],[20,-17],[26,-14],[30,-10],[33,-9],[35,-6],[36,-5]],
+  madagascar: [[-12,49],[-16,50],[-20,48],[-24,47],[-25,45],[-22,43],[-16,44],[-12,49]],
+  europe_asia: [[36,-10],[38,-9],[43,-9],[44,-2],[48,-5],[50,-1],[51,2],[51,4],[53,7],[57,8],[59,11],[58,17],[60,22],[65,22],[69,18],[71,26],[69,31],[69,38],[69,44],[73,58],[73,80],[77,105],[73,130],[68,163],[60,165],[55,162],[45,142],[46,135],[43,132],[43,140],[45,142],[50,155],[59,163],[54,140],[50,142],[46,138],[42,131],[39,128],[36,127],[34,127],[33,126],[35,129],[34,135],[35,140],[37,140],[40,141],[43,145],[37,137],[34,132],[32,131],[30,131],[24,121],[22,114],[21,110],[10,109],[10,104],[12,101],[8,99],[6,101],[2,103],[5,97],[13,93],[16,95],[22,92],[22,89],[20,86],[19,85],[15,80],[10,79],[8,77],[16,73],[22,69],[23,67],[24,62],[25,57],[27,51],[29,48],[27,50],[21,55],[16,52],[13,48],[12,45],[21,40],[25,37],[29,34],[31,32],[33,35],[36,36],[37,40],[41,36],[40,26],[36,23],[35,24],[36,27],[38,27],[39,24],[40,19],[42,15],[45,14],[45,12],[44,10],[41,9],[40,8],[41,3],[42,3],[43,8],[44,3],[43,0],[40,-3],[37,-6],[36,-10]],
+  uk_ireland: [[60,-2],[58,-4],[55,-5],[54,-6],[51,-5],[50,-1],[53,2],[56,-1],[58,-4],[60,-2],[55,-6],[53,-9],[52,-10],[54,-10],[55,-6]],
+  iceland: [[66,-23],[66,-14],[64,-14],[63,-17],[64,-22],[66,-23]],
+  japan: [[45,142],[43,146],[41,141],[37,141],[35,140],[34,138],[33,131],[31,131],[33,134],[35,137],[38,141],[41,141],[45,142]],
+  indonesia: [[5,95],[1,102],[-2,100],[-5,105],[-7,108],[-8,115],[-9,120],[-8,126],[-10,124],[-8,117],[-4,117],[-1,110],[1,104],[5,95]],
+  new_guinea: [[-1,131],[-3,142],[-9,147],[-10,141],[-7,139],[-5,134],[-1,131]],
+  namerica: [[72,-156],[70,-145],[67,-141],[60,-148],[55,-133],[51,-128],[48,-125],[42,-124],[34,-120],[32,-117],[27,-114],[23,-110],[20,-105],[16,-96],[18,-94],[15,-92],[13,-88],[15,-83],[9,-79],[9,-77],[11,-74],[13,-73],[16,-80],[19,-87],[21,-87],[21,-90],[24,-97],[28,-97],[29,-94],[30,-89],[30,-85],[28,-82],[25,-80],[30,-81],[32,-80],[36,-76],[40,-74],[42,-70],[45,-66],[47,-60],[49,-56],[52,-55],[55,-60],[60,-64],[63,-78],[64,-86],[62,-92],[65,-98],[71,-95],[73,-108],[69,-125],[70,-135],[71,-145],[72,-156]],
+  cuba: [[23,-82],[21,-76],[20,-74],[23,-78],[23,-82]],
+  samerica: [[12,-72],[11,-63],[8,-60],[5,-52],[0,-50],[-5,-36],[-8,-35],[-14,-39],[-23,-41],[-29,-48],[-34,-53],[-39,-60],[-50,-68],[-55,-68],[-53,-72],[-47,-74],[-37,-73],[-30,-71],[-18,-71],[-5,-81],[2,-78],[7,-78],[11,-75],[12,-72]],
+  australia: [[-11,130],[-12,141],[-17,146],[-20,149],[-25,153],[-34,151],[-38,146],[-39,143],[-35,138],[-32,134],[-32,126],[-35,117],[-31,115],[-25,113],[-22,114],[-19,122],[-14,127],[-11,130]],
+  new_zealand: [[-34,173],[-37,175],[-40,175],[-42,174],[-41,172],[-37,174],[-34,173],[-41,172],[-43,170],[-45,167],[-46,170],[-44,173],[-41,172]],
+  greenland: [[82,-30],[80,-20],[77,-17],[70,-22],[65,-40],[60,-44],[66,-52],[75,-60],[80,-55],[82,-35],[82,-30]],
+  antarctica: [[-66,-60],[-72,-60],[-75,-30],[-72,0],[-69,25],[-68,55],[-66,90],[-65,125],[-70,150],[-77,165],[-80,180],[-78,-160],[-74,-130],[-73,-100],[-69,-70],[-66,-60]],
+  ellesmere: [[82,-80],[82,-60],[78,-70],[76,-90],[80,-95],[82,-80]],
+  svalbard: [[80,15],[80,28],[77,25],[76,15],[80,15]],
+  sahara_desert: [[30,-10],[30,30],[18,30],[15,0],[20,-15],[30,-10]],  // zona bioma
+  arabian_desert: [[30,35],[30,55],[15,50],[13,42],[20,38],[30,35]],
+  gobi_desert: [[45,90],[48,115],[40,115],[38,95],[42,88],[45,90]],
+  aus_desert: [[-20,120],[-20,140],[-32,140],[-32,120],[-20,120]],
+  rainforest_amazon: [[5,-75],[5,-50],[-10,-50],[-15,-70],[5,-75]],
+  rainforest_congo: [[5,12],[5,30],[-5,28],[-5,10],[5,12]],
+  rainforest_sea: [[5,95],[5,120],[-5,120],[-5,95],[5,95]],
+  ice_antarctic: [[-65,-180],[-65,180],[-90,180],[-90,-180],[-65,-180]],
+  ice_arctic_greenland: [[83,-60],[83,-30],[72,-25],[70,-45],[78,-60],[83,-60]],
+};
+
+/* converte lat/lon para coords de pixel da textura equirectangular */
+function ll2px(lat, lon, W, H){
+  return [(lon+180)/360*W, (90-lat)/180*H];
+}
+
+/* Terra (esfera + wireframe grid + atmosfera) */
+const earthGroup = new THREE.Group();
+orbitScene.add(earthGroup);
+
+const earthGeo = new THREE.SphereGeometry(RE, 128, 96);
+earthGeo.rotateX(Math.PI/2);  // CRÍTICO: alinha polo (originalmente +Y) com +Z do ECI/ECEF
+
+/* -------- textura procedural detalhada (usada de imediato e como fallback se CDN falhar) -------- */
+function makeEarthTexture(){
+  const W = 4096, H = 2048;
+  const c = document.createElement('canvas'); c.width = W; c.height = H;
+  const ctx = c.getContext('2d');
+
+  // --- OCEANO: gradiente base + variação de profundidade simulada ---
+  const oceanGrad = ctx.createLinearGradient(0,0,0,H);
+  oceanGrad.addColorStop(0.00, '#0a1828');   // ártico
+  oceanGrad.addColorStop(0.10, '#0e2136');
+  oceanGrad.addColorStop(0.35, '#143050');
+  oceanGrad.addColorStop(0.50, '#1a3a5e');   // equador
+  oceanGrad.addColorStop(0.65, '#143050');
+  oceanGrad.addColorStop(0.90, '#0e2136');
+  oceanGrad.addColorStop(1.00, '#0a1828');
+  ctx.fillStyle = oceanGrad;
+  ctx.fillRect(0,0,W,H);
+
+  // noise de oceano sutil (reduzido)
+  const oceanImg = ctx.getImageData(0,0,W,H);
+  const od = oceanImg.data;
+  for(let i=0; i<od.length; i+=4){
+    const n = (Math.random()-0.5) * 5;  // reduzido de 12 → 5
+    od[i] = Math.max(0, Math.min(255, od[i]+n*0.2));
+    od[i+1] = Math.max(0, Math.min(255, od[i+1]+n*0.3));
+    od[i+2] = Math.max(0, Math.min(255, od[i+2]+n*0.5));
+  }
+  ctx.putImageData(oceanImg, 0, 0);
+
+  // --- HELPERS p/ desenho ---
+  const drawPoly = (pts, fill, stroke, lw=1) => {
+    ctx.beginPath();
+    pts.forEach((p,i) => {
+      const [x,y] = ll2px(p[0], p[1], W, H);
+      if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+    });
+    ctx.closePath();
+    if(fill){ ctx.fillStyle = fill; ctx.fill(); }
+    if(stroke){ ctx.strokeStyle = stroke; ctx.lineWidth = lw; ctx.stroke(); }
+  };
+
+  // --- TERRA base (verde temperado) ---
+  const landBase = '#2a4a2e';
+  const landStroke = '#4a7a50';
+  const landPolys = ['africa','madagascar','europe_asia','uk_ireland','iceland','japan','indonesia','new_guinea','namerica','cuba','samerica','australia','new_zealand','greenland','ellesmere','svalbard'];
+  landPolys.forEach(k => drawPoly(COASTLINES[k], landBase, landStroke, 1.5));
+
+  // --- BIOMAS sobrepostos (cor diferente) ---
+  // Desertos - amarelo/areia
+  ctx.globalCompositeOperation = 'source-atop';  // só cobre land
+  const desertColor = 'rgba(180, 150, 90, 0.80)';
+  ['sahara_desert','arabian_desert','gobi_desert','aus_desert'].forEach(k => drawPoly(COASTLINES[k], desertColor, null));
+
+  // Florestas tropicais - verde profundo
+  const rainforestColor = 'rgba(20, 55, 30, 0.70)';
+  ['rainforest_amazon','rainforest_congo','rainforest_sea'].forEach(k => drawPoly(COASTLINES[k], rainforestColor, null));
+
+  // Calotas polares
+  const iceColor = 'rgba(220, 230, 240, 0.85)';
+  ['ice_antarctic','ice_arctic_greenland'].forEach(k => drawPoly(COASTLINES[k], iceColor, null));
+  ctx.globalCompositeOperation = 'source-over';
+
+  // Antártica sólida (fora do continentes acima)
+  drawPoly(COASTLINES.antarctica, '#c8d4dc', '#8a96a0', 1);
+
+  // Tundra (banda alta-latitude da Eurasia/América do Norte) — overlay sutil
+  ctx.globalCompositeOperation = 'source-atop';
+  ctx.fillStyle = 'rgba(110, 120, 115, 0.35)';
+  ctx.fillRect(0, 0, W, (90-60)/180*H);
+  ctx.globalCompositeOperation = 'source-over';
+
+  // --- noise fino sobre land p/ textura (reduzido — evita glitter) ---
+  const imgData = ctx.getImageData(0,0,W,H);
+  const d = imgData.data;
+  for(let i=0; i<d.length; i+=4){
+    const r=d[i], g=d[i+1], b=d[i+2];
+    const isLand = (g > b && r < g+30 && g > 50) || (r>150 && g>130) || (r>200 && g>200 && b>200);
+    if(isLand){
+      const n = (Math.random()-0.5) * 8;  // reduzido de 18 → 8
+      d[i]   = Math.max(0, Math.min(255, r+n*0.5));
+      d[i+1] = Math.max(0, Math.min(255, g+n*0.6));
+      d[i+2] = Math.max(0, Math.min(255, b+n*0.4));
+    }
+  }
+  ctx.putImageData(imgData, 0, 0);
+
+  // --- grid lat/lon (muito sutil p/ não dominar) ---
+  ctx.strokeStyle = 'rgba(200, 220, 230, 0.04)';
+  ctx.lineWidth = 1;
+  for(let lat=15; lat<180; lat+=15){
+    ctx.beginPath(); ctx.moveTo(0, lat*H/180); ctx.lineTo(W, lat*H/180); ctx.stroke();
+  }
+  for(let lon=15; lon<360; lon+=15){
+    ctx.beginPath(); ctx.moveTo(lon*W/360, 0); ctx.lineTo(lon*W/360, H); ctx.stroke();
+  }
+
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.encoding = THREE.sRGBEncoding;
+  tex.anisotropy = 8;
+  return tex;
+}
+
+const earthMat = new THREE.MeshPhongMaterial({
+  map: makeEarthTexture(),
+  shininess: 15,
+  specular: 0x334455,
+  emissive: 0x050b14,
+  emissiveIntensity: 0.35
+});
+const earthMesh = new THREE.Mesh(earthGeo, earthMat);
+earthGroup.add(earthMesh);
+orbitRenderer.outputEncoding = THREE.sRGBEncoding;
+
+/* -------- tentar carregar textura NASA Blue Marble do CDN (jsdelivr) -------- */
+/* Se o CORS permitir, substituímos o procedural. Se não, mantemos.
+   IMPORTANTE: bump, specular e clouds só carregam SE o diffuse Blue Marble
+   carregar com sucesso — caso contrário os maps auxiliares saturam a
+   procedural com ruído (glitch arco-íris). */
+const texLoader = new THREE.TextureLoader();
+texLoader.setCrossOrigin('anonymous');
+const CDN_BASE = 'https://cdn.jsdelivr.net/npm/three-globe@2.24.13/example/img/';
+let cloudsMesh = null;
+let blueMarbleOK = false;
+
+texLoader.load(CDN_BASE + 'earth-blue-marble.jpg',
+  (tex) => {
+    tex.encoding = THREE.sRGBEncoding;
+    tex.anisotropy = 8;
+    earthMat.map = tex;
+    // emissive mais escuro quando temos diffuse real (não precisa do ambient fake)
+    earthMat.emissive = new THREE.Color(0x020710);
+    earthMat.emissiveIntensity = 0.15;
+    earthMat.needsUpdate = true;
+    blueMarbleOK = true;
+    console.log('[OrbitLab] Blue Marble carregado do CDN');
+
+    // agora tenta carregar os maps auxiliares — só se o diffuse funcionou
+    texLoader.load(CDN_BASE + 'earth-topology.png',
+      (t) => { earthMat.bumpMap = t; earthMat.bumpScale = 8; earthMat.needsUpdate = true; },
+      undefined, () => {}
+    );
+    texLoader.load(CDN_BASE + 'earth-water.png',
+      (t) => {
+        earthMat.specularMap = t;
+        earthMat.specular = new THREE.Color(0x556677);
+        earthMat.shininess = 40;
+        earthMat.needsUpdate = true;
+      },
+      undefined, () => {}
+    );
+    texLoader.load(CDN_BASE + 'earth-clouds.png',
+      (t) => {
+        t.encoding = THREE.sRGBEncoding;
+        const cloudsGeo = new THREE.SphereGeometry(RE*1.008, 96, 72);
+        cloudsGeo.rotateX(Math.PI/2);
+        cloudsMesh = new THREE.Mesh(
+          cloudsGeo,
+          new THREE.MeshPhongMaterial({
+            map: t, alphaMap: t, transparent: true, opacity: 0.6, depthWrite: false
+          })
+        );
+        earthGroup.add(cloudsMesh);
+      },
+      undefined, () => {}
+    );
+  },
+  undefined,
+  () => {
+    console.log('[OrbitLab] Usando textura procedural (CDN falhou/CORS)');
+    // mantém earthMat.map = makeEarthTexture() (já setado) — nenhum map auxiliar
+  }
+);
+
+// wireframe pólos/eixo
+const axisGeo = new THREE.BufferGeometry().setFromPoints([
+  new THREE.Vector3(0,0,-RE*1.2), new THREE.Vector3(0,0,RE*1.2)
+]);
+const axisLine = new THREE.Line(axisGeo, new THREE.LineBasicMaterial({ color: 0x4a5361, transparent:true, opacity:0.5 }));
+orbitScene.add(axisLine);
+
+// atmosfera (glow sphere)
+const atmGeo = new THREE.SphereGeometry(RE*1.03, 64, 48);
+const atmMat = new THREE.ShaderMaterial({
+  vertexShader: `varying vec3 vN; void main(){ vN = normalize(normalMatrix*normal); gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
+  fragmentShader: `varying vec3 vN; void main(){ float i = pow(0.72 - dot(vN, vec3(0,0,1)), 3.0); gl_FragColor = vec4(0.35, 0.60, 0.95, 1.0)*i*0.5; }`,
+  blending: THREE.AdditiveBlending, side: THREE.BackSide, transparent: true
+});
+const atmMesh = new THREE.Mesh(atmGeo, atmMat);
+orbitScene.add(atmMesh);
+
+// marcador sítio de lançamento
+const siteMarker = new THREE.Mesh(
+  new THREE.SphereGeometry(60, 16, 12),
+  new THREE.MeshBasicMaterial({ color: 0xf4b860 })
+);
+earthGroup.add(siteMarker);
+const sitePulse = new THREE.Mesh(
+  new THREE.SphereGeometry(120, 16, 12),
+  new THREE.MeshBasicMaterial({ color: 0xf4b860, transparent:true, opacity:0.3, wireframe:true })
+);
+earthGroup.add(sitePulse);
+
+// foguete — Saturn V simplificado com estágios separáveis
+function makeSaturnV(){
+  const g = new THREE.Group();
+
+  // materiais
+  const white = new THREE.MeshPhongMaterial({ color: 0xeeeae0, shininess: 50, specular: 0x222 });
+  const black = new THREE.MeshPhongMaterial({ color: 0x1a1a1a });
+  const darkMetal = new THREE.MeshPhongMaterial({ color: 0x2a2a30 });
+  const grey = new THREE.MeshPhongMaterial({ color: 0x6a6f78, shininess: 40 });
+  const siver = new THREE.MeshPhongMaterial({ color: 0xb8bcc4, shininess: 80 });
+  const engineMat = new THREE.MeshPhongMaterial({ color: 0x33363c, shininess: 60 });
+  const redMat = new THREE.MeshPhongMaterial({ color: 0xb54440 });
+
+  // helper: cilindro ao longo de Z (local), com base em z=zBase
+  const cyl = (r1, r2, h, zBase, mat, open=false) => {
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(r1, r2, h, 24, 1, open), mat);
+    m.rotation.x = Math.PI/2;
+    m.position.z = zBase + h/2;
+    return m;
+  };
+
+  // --- S-IC (primeiro estágio, 42m → 80 unidades, ⌀10m → raio 20) ---
+  const sicGroup = new THREE.Group();
+  sicGroup.add(cyl(20, 20, 80, 0, white));
+  // listras pretas características
+  sicGroup.add(cyl(20.3, 20.3, 4, 6, black));
+  sicGroup.add(cyl(20.3, 20.3, 4, 38, black));
+  sicGroup.add(cyl(20.3, 20.3, 4, 66, black));
+  // legenda "USA" mockada como listra vertical
+  const usaMark = new THREE.Mesh(new THREE.BoxGeometry(1, 6, 12), black);
+  usaMark.position.set(20.1, 0, 50);
+  sicGroup.add(usaMark);
+  // 5 motores F-1 na base (4 periféricos + 1 central)
+  for(let i=0; i<5; i++){
+    const eng = new THREE.Mesh(new THREE.ConeGeometry(4.5, 15, 16, 1, false), engineMat);
+    eng.rotation.x = Math.PI;
+    if(i === 0){
+      eng.position.set(0, 0, -8);
+    } else {
+      const ang = (i-1) * Math.PI/2 + Math.PI/4;
+      eng.position.set(Math.cos(ang)*11, Math.sin(ang)*11, -8);
+    }
+    sicGroup.add(eng);
+    // gás nozzle detail
+    const neck = new THREE.Mesh(new THREE.CylinderGeometry(2, 2, 4, 12), grey);
+    neck.rotation.x = Math.PI/2;
+    neck.position.copy(eng.position);
+    neck.position.z = -1;
+    sicGroup.add(neck);
+  }
+  // aletas (fins) do S-IC
+  for(let i=0; i<4; i++){
+    const fin = new THREE.Mesh(new THREE.BoxGeometry(2, 10, 14), darkMetal);
+    const ang = i * Math.PI/2;
+    fin.position.set(Math.cos(ang)*24, Math.sin(ang)*24, 7);
+    fin.rotation.z = ang;
+    sicGroup.add(fin);
+  }
+  g.add(sicGroup);
+
+  // --- Interstage 1 (transição S-IC → S-II) ---
+  const is1 = cyl(20, 20, 4, 80, darkMetal);
+  g.add(is1);
+
+  // --- S-II (segundo estágio, 25m → 50 unidades, mesmo ⌀) ---
+  const siiGroup = new THREE.Group();
+  siiGroup.add(cyl(20, 20, 50, 84, white));
+  siiGroup.add(cyl(20.3, 20.3, 3, 90, black));
+  siiGroup.add(cyl(20.3, 20.3, 3, 125, black));
+  // 5 motores J-2 na base do S-II (visíveis após separação)
+  for(let i=0; i<5; i++){
+    const eng = new THREE.Mesh(new THREE.ConeGeometry(3, 8, 12, 1, false), engineMat);
+    eng.rotation.x = Math.PI;
+    if(i === 0){
+      eng.position.set(0, 0, 78);
+    } else {
+      const ang = (i-1) * Math.PI/2 + Math.PI/4;
+      eng.position.set(Math.cos(ang)*8, Math.sin(ang)*8, 78);
+    }
+    siiGroup.add(eng);
+  }
+  g.add(siiGroup);
+
+  // --- Interstage 2 (transição cônica de 20 → 13) ---
+  const is2 = cyl(20, 13, 6, 134, darkMetal);
+  g.add(is2);
+
+  // --- S-IVB (terceiro estágio, 18m → 35 unidades, ⌀6.6m → raio 13) ---
+  const sivbGroup = new THREE.Group();
+  sivbGroup.add(cyl(13, 13, 35, 140, white));
+  sivbGroup.add(cyl(13.3, 13.3, 2, 145, black));
+  sivbGroup.add(cyl(13.3, 13.3, 2, 170, black));
+  // 1 motor J-2 central
+  const j2 = new THREE.Mesh(new THREE.ConeGeometry(4, 10, 12), engineMat);
+  j2.rotation.x = Math.PI;
+  j2.position.set(0, 0, 137);
+  sivbGroup.add(j2);
+  g.add(sivbGroup);
+
+  // --- Instrument Unit ---
+  g.add(cyl(13, 13, 3, 175, grey));
+
+  // --- Service Module (SM) ---
+  const smGroup = new THREE.Group();
+  smGroup.add(cyl(13, 13, 22, 178, siver));
+  // SPS engine bell (só visível em zoom)
+  const sps = new THREE.Mesh(new THREE.ConeGeometry(3, 6, 10), engineMat);
+  sps.rotation.x = Math.PI;
+  sps.position.set(0, 0, 176);
+  smGroup.add(sps);
+  g.add(smGroup);
+
+  // --- Command Module (CM, cone) ---
+  const cm = cyl(13, 6, 8, 200, white);
+  g.add(cm);
+
+  // --- LES tower + escape rocket ---
+  const lesGroup = new THREE.Group();
+  lesGroup.add(cyl(1, 1, 20, 208, siver));  // estrutura treliçada (simplificada)
+  const lesBody = cyl(2.5, 2.5, 10, 228, white);
+  lesGroup.add(lesBody);
+  const lesNose = new THREE.Mesh(new THREE.ConeGeometry(2.5, 5, 10), redMat);
+  lesNose.rotation.x = Math.PI/2;
+  lesNose.position.z = 240.5;
+  lesGroup.add(lesNose);
+  // pequenos motores no corpo do LES
+  for(let i=0; i<3; i++){
+    const ang = i * 2*Math.PI/3;
+    const nozzle = new THREE.Mesh(new THREE.ConeGeometry(0.8, 2.5, 6), engineMat);
+    nozzle.rotation.x = Math.PI/2 + Math.PI/6;
+    nozzle.rotation.z = ang;
+    nozzle.position.set(Math.cos(ang)*3.2, Math.sin(ang)*3.2, 236);
+    lesGroup.add(nozzle);
+  }
+  g.add(lesGroup);
+
+  // --- Flame (muda conforme estágio ativo) ---
+  const flame = new THREE.Mesh(
+    new THREE.ConeGeometry(15, 60, 14),
+    new THREE.MeshBasicMaterial({ color: 0xff9944, transparent:true, opacity:0.9 })
+  );
+  flame.rotation.x = Math.PI/2;  // aponta para -Z (trás)
+  flame.position.z = -30;
+  g.add(flame);
+
+  // refs pra staging
+  g.userData = {
+    sic: sicGroup,
+    sii: siiGroup,
+    sivb: sivbGroup,
+    sm: smGroup,
+    cm: cm,
+    les: lesGroup,
+    is1, is2,
+    flame,
+    currentStage: 'sic'  // 'sic' | 'sii' | 'sivb' | 'payload'
+  };
+
+  return g;
+}
+
+const rocketGroup = makeSaturnV();
+rocketGroup.visible = false;
+orbitScene.add(rocketGroup);
+
+// satélite (pequena caixa)
+const satGroup = new THREE.Group();
+const satBox = new THREE.Mesh(
+  new THREE.BoxGeometry(80, 80, 80),
+  new THREE.MeshPhongMaterial({ color: 0xe6e8ec, emissive: 0x112, shininess: 60 })
+);
+satGroup.add(satBox);
+// dois painéis solares
+const panelMat = new THREE.MeshPhongMaterial({ color: 0x1a3a6a, emissive: 0x082040, shininess: 90 });
+const panelL = new THREE.Mesh(new THREE.BoxGeometry(200, 8, 80), panelMat);
+panelL.position.x = -150;
+satGroup.add(panelL);
+const panelR = new THREE.Mesh(new THREE.BoxGeometry(200, 8, 80), panelMat);
+panelR.position.x = 150;
+satGroup.add(panelR);
+satGroup.visible = false;
+orbitScene.add(satGroup);
+
+// trilha orbital
+const trailMax = 800;
+const trailGeo = new THREE.BufferGeometry();
+const trailPositions = new Float32Array(trailMax * 3);
+trailGeo.setAttribute('position', new THREE.BufferAttribute(trailPositions, 3));
+trailGeo.setDrawRange(0, 0);
+const trailMat = new THREE.LineBasicMaterial({ color: 0x9dd6b4, transparent: true, opacity: 0.85 });
+const trailLine = new THREE.Line(trailGeo, trailMat);
+orbitScene.add(trailLine);
+
+// eixos ECI de referência (pequenos no canto)
+const axesHelper = new THREE.Group();
+const mkAxis = (dir, color) => {
+  const geo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0), dir.clone().multiplyScalar(2500)]);
+  return new THREE.Line(geo, new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.6 }));
+};
+axesHelper.add(mkAxis(new THREE.Vector3(1,0,0), 0xe85d75));
+axesHelper.add(mkAxis(new THREE.Vector3(0,1,0), 0x9dd6b4));
+axesHelper.add(mkAxis(new THREE.Vector3(0,0,1), 0x6fa8dc));
+orbitScene.add(axesHelper);
+
+/* órbita orbitCam controls (arrasto + zoom simples) */
+let camState = {
+  theta: Math.PI/2 + 0.3,  // azimute
+  phi: Math.PI/2 - 0.4,    // polar
+  r: 25000
+};
+function updateCamPosition(){
+  const x = camState.r * Math.sin(camState.phi) * Math.cos(camState.theta);
+  const y = camState.r * Math.sin(camState.phi) * Math.sin(camState.theta);
+  const z = camState.r * Math.cos(camState.phi);
+  orbitCam.position.set(x, y, z);
+  orbitCam.lookAt(0,0,0);
+}
+updateCamPosition();
+
+orbitCanvas.addEventListener('mousedown', (e)=>{
+  const startX = e.clientX, startY = e.clientY;
+  const t0 = camState.theta, p0 = camState.phi;
+  function onMove(ev){
+    const dx = ev.clientX - startX;
+    const dy = ev.clientY - startY;
+    camState.theta = t0 - dx * 0.006;
+    camState.phi = Math.max(0.08, Math.min(Math.PI-0.08, p0 - dy * 0.006));
+    updateCamPosition();
+  }
+  function onUp(){
+    window.removeEventListener('mousemove', onMove);
+    window.removeEventListener('mouseup', onUp);
+  }
+  window.addEventListener('mousemove', onMove);
+  window.addEventListener('mouseup', onUp);
+});
+orbitCanvas.addEventListener('wheel', (e)=>{
+  e.preventDefault();
+  camState.r = Math.max(RE*1.3, Math.min(150000, camState.r * (1 + e.deltaY * 0.001)));
+  updateCamPosition();
+}, {passive: false});
+
+/* =============================================================
+   SETUP THREE.JS — VISTA DE ATITUDE
+   ============================================================= */
+const attCanvas = document.getElementById('attitude-canvas');
+const attRenderer = new THREE.WebGLRenderer({ canvas: attCanvas, antialias: true, alpha: true });
+attRenderer.setPixelRatio(window.devicePixelRatio);
+const attScene = new THREE.Scene();
+const attCam = new THREE.PerspectiveCamera(40, 1, 0.1, 1000);
+attCam.position.set(8, -10, 6);
+attCam.up.set(0,0,1);
+attCam.lookAt(0,0,0);
+
+attScene.add(new THREE.AmbientLight(0x606878, 0.6));
+const attLight = new THREE.DirectionalLight(0xffe0b0, 1.0);
+attLight.position.set(5,5,8);
+attScene.add(attLight);
+const attLight2 = new THREE.DirectionalLight(0x80a0ff, 0.4);
+attLight2.position.set(-5,-3,-2);
+attScene.add(attLight2);
+
+// frame orbital (referência — fixo no attScene)
+const orbFrame = new THREE.Group();
+attScene.add(orbFrame);
+// Earth indicator (small sphere, direction toward nadir)
+const nadirSphere = new THREE.Mesh(
+  new THREE.SphereGeometry(0.6, 20, 16),
+  new THREE.MeshPhongMaterial({ color: 0x1a3a6a, emissive: 0x0a1a33 })
+);
+nadirSphere.position.set(0, 0, -6);
+orbFrame.add(nadirSphere);
+// eixos orbitais
+function mkAttAxis(dir, col, len=3){
+  const ref = new THREE.Vector3().copy(dir).normalize();
+  const geo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), ref.multiplyScalar(len)]);
+  const line = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: col, transparent:true, opacity:0.6 }));
+  return line;
+}
+orbFrame.add(mkAttAxis(new THREE.Vector3(1,0,0), 0x9dd6b4, 3));  // vel x
+orbFrame.add(mkAttAxis(new THREE.Vector3(0,1,0), 0xf4b860, 3));  // orb-normal y
+orbFrame.add(mkAttAxis(new THREE.Vector3(0,0,-1), 0xe85d75, 6)); // nadir -z
+
+// corpo do satélite
+const sat3 = new THREE.Group();
+attScene.add(sat3);
+// corpo (caixa)
+const bodyMat = new THREE.MeshPhongMaterial({ color: 0xcfd4dc, emissive: 0x1a1a1f, shininess: 60 });
+const bodyMesh = new THREE.Mesh(new THREE.BoxGeometry(1.4, 1.4, 1.2), bodyMat);
+sat3.add(bodyMesh);
+// detalhes de superfície
+const loopMat = new THREE.MeshPhongMaterial({ color: 0x2a3646, emissive: 0x0a1020 });
+for(let z of [-0.5, 0.5]){
+  const ring = new THREE.Mesh(new THREE.BoxGeometry(1.45, 0.06, 0.1), loopMat);
+  ring.position.z = z;
+  sat3.add(ring);
+}
+// painel solar (eixo x)
+const solarWing = new THREE.Group();
+const wingMat = new THREE.MeshPhongMaterial({ color: 0x0e2852, emissive: 0x051838, shininess: 100 });
+const wing1 = new THREE.Mesh(new THREE.BoxGeometry(3.0, 1.2, 0.05), wingMat);
+wing1.position.x = 2.4;
+solarWing.add(wing1);
+const wing2 = new THREE.Mesh(new THREE.BoxGeometry(3.0, 1.2, 0.05), wingMat);
+wing2.position.x = -2.4;
+solarWing.add(wing2);
+// linhas de células
+const cellTex = (()=> {
+  const c = document.createElement('canvas'); c.width = 256; c.height = 128;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#0e2852'; ctx.fillRect(0,0,256,128);
+  ctx.strokeStyle = '#1e3c6e'; ctx.lineWidth = 1;
+  for(let i=16;i<256;i+=16){ ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,128); ctx.stroke(); }
+  for(let j=16;j<128;j+=16){ ctx.beginPath(); ctx.moveTo(0,j); ctx.lineTo(256,j); ctx.stroke(); }
+  return new THREE.CanvasTexture(c);
+})();
+wing1.material = new THREE.MeshPhongMaterial({ map: cellTex, emissive: 0x051838, shininess: 80 });
+wing2.material = new THREE.MeshPhongMaterial({ map: cellTex, emissive: 0x051838, shininess: 80 });
+sat3.add(solarWing);
+
+// boom + tip mass (ao longo de +z do corpo = zenith) 
+const boomGroup = new THREE.Group();
+const boomShaft = new THREE.Mesh(
+  new THREE.CylinderGeometry(0.05, 0.05, 1, 8),
+  new THREE.MeshPhongMaterial({ color: 0xf4b860, emissive: 0x221100 })
+);
+boomShaft.rotation.x = Math.PI/2;
+boomGroup.add(boomShaft);
+const tipMass = new THREE.Mesh(
+  new THREE.SphereGeometry(0.25, 20, 16),
+  new THREE.MeshPhongMaterial({ color: 0xf4b860, emissive: 0x3a2b08 })
+);
+boomGroup.add(tipMass);
+sat3.add(boomGroup);
+
+function updateBoomVisual(L){
+  // boom extends along +z of body
+  boomShaft.scale.y = Math.max(0.001, L);
+  boomShaft.position.z = L/2;
+  tipMass.position.z = L;
+  tipMass.visible = L > 0.05;
+}
+updateBoomVisual(0);
+
+/* =============================================================
+   GROUND TRACK (canvas 2D) — suporta equirectangular e Mercator
+   ============================================================= */
+const gCanvas = document.getElementById('ground-canvas');
+const gCtx = gCanvas.getContext('2d');
+let gW = 800, gH = 300;
+
+/* projeção: lat/lon -> pixel */
+function projLL(lat, lon, W, H, proj){
+  const x = ((lon + 540) % 360 - 180 + 180) / 360 * W;  // wrap-safe
+  let y;
+  if(proj === 'mercator'){
+    const latC = Math.max(-85, Math.min(85, lat));
+    const latR = latC * Math.PI / 180;
+    const mercY = Math.log(Math.tan(Math.PI/4 + latR/2));
+    const maxMerc = Math.log(Math.tan(Math.PI/4 + 85*Math.PI/180/2));
+    y = H/2 - (mercY / maxMerc) * (H/2);
+  } else {
+    y = (90 - lat) / 180 * H;
+  }
+  return [x, y];
+}
+
+function drawGroundTrack(){
+  gW = gCanvas.width / window.devicePixelRatio;
+  gH = gCanvas.height / window.devicePixelRatio;
+  const proj = sim.groundProj;
+
+  // fundo
+  gCtx.fillStyle = '#05070b';
+  gCtx.fillRect(0,0,gW,gH);
+
+  // grid lat/lon na projeção certa
+  gCtx.strokeStyle = '#1a2330';
+  gCtx.lineWidth = 1;
+  const latStep = (proj === 'mercator') ? 15 : 15;
+  for(let lat=-75; lat<=75; lat+=latStep){
+    const [_,y] = projLL(lat, 0, gW, gH, proj);
+    gCtx.beginPath(); gCtx.moveTo(0,y); gCtx.lineTo(gW,y); gCtx.stroke();
+  }
+  for(let lon=-165; lon<=165; lon+=15){
+    const [x,_] = projLL(0, lon, gW, gH, proj);
+    gCtx.beginPath(); gCtx.moveTo(x,0); gCtx.lineTo(x,gH); gCtx.stroke();
+  }
+
+  // equador + meridiano 0 destacados
+  gCtx.strokeStyle = '#2a3646';
+  gCtx.lineWidth = 1.3;
+  const [_eqX, eqY] = projLL(0, 0, gW, gH, proj);
+  gCtx.beginPath(); gCtx.moveTo(0,eqY); gCtx.lineTo(gW,eqY); gCtx.stroke();
+  const [pmX, _pmY] = projLL(0, 0, gW, gH, proj);
+  gCtx.beginPath(); gCtx.moveTo(pmX,0); gCtx.lineTo(pmX,gH); gCtx.stroke();
+
+  // continentes (dados detalhados em lat/lon)
+  const landKeys = ['africa','madagascar','europe_asia','uk_ireland','iceland','japan','indonesia','new_guinea','namerica','cuba','samerica','australia','new_zealand','greenland','ellesmere','svalbard','antarctica'];
+  gCtx.fillStyle = 'rgba(26, 51, 34, 0.55)';
+  gCtx.strokeStyle = 'rgba(90, 130, 100, 0.7)';
+  gCtx.lineWidth = 0.9;
+  landKeys.forEach(k => {
+    const poly = COASTLINES[k];
+    gCtx.beginPath();
+    poly.forEach((p,i) => {
+      const [x,y] = projLL(p[0], p[1], gW, gH, proj);
+      if(i===0) gCtx.moveTo(x,y); else gCtx.lineTo(x,y);
+    });
+    gCtx.closePath();
+    gCtx.fill();
+    gCtx.stroke();
+  });
+
+  // marcador do sítio de lançamento
+  const [siteX, siteY] = projLL(sim.cfg.lat, sim.cfg.lon, gW, gH, proj);
+  gCtx.strokeStyle = '#f4b860';
+  gCtx.lineWidth = 1.5;
+  gCtx.beginPath(); gCtx.arc(siteX, siteY, 4, 0, Math.PI*2); gCtx.stroke();
+  gCtx.beginPath(); gCtx.arc(siteX, siteY, 9, 0, Math.PI*2); gCtx.stroke();
+  gCtx.fillStyle = '#f4b860';
+  gCtx.font = '9px JetBrains Mono';
+  gCtx.fillText('LV', siteX+12, siteY+3);
+
+  // ground track persistente — desenhamos a trilha inteira
+  const tr = sim.groundTrail;
+  if(tr.length > 1){
+    gCtx.lineWidth = 1.3;
+    // agrupamos em segmentos contínuos (quebras na longitude)
+    for(let i=1;i<tr.length;i++){
+      const p0 = tr[i-1], p1 = tr[i];
+      if(Math.abs(p1.lon - p0.lon) > 180) continue;  // cruza anti-meridiano
+      const [x0,y0] = projLL(p0.lat, p0.lon, gW, gH, proj);
+      const [x1,y1] = projLL(p1.lat, p1.lon, gW, gH, proj);
+      // fade baseado na idade
+      const age = (tr.length - i) / tr.length;
+      const alpha = Math.max(0.18, 1 - age*0.75);
+      gCtx.strokeStyle = `rgba(157, 214, 180, ${alpha})`;
+      gCtx.beginPath(); gCtx.moveTo(x0,y0); gCtx.lineTo(x1,y1); gCtx.stroke();
+    }
+    // posição atual
+    const cur = tr[tr.length-1];
+    const [cx,cy] = projLL(cur.lat, cur.lon, gW, gH, proj);
+    gCtx.fillStyle = '#c8efd8';
+    gCtx.strokeStyle = '#9dd6b4';
+    gCtx.lineWidth = 1.5;
+    gCtx.beginPath(); gCtx.arc(cx, cy, 3.5, 0, Math.PI*2); gCtx.fill();
+    gCtx.beginPath(); gCtx.arc(cx, cy, 9, 0, Math.PI*2); gCtx.stroke();
+    gCtx.fillStyle = '#c8efd8';
+    gCtx.font = '10px JetBrains Mono';
+    gCtx.fillText(`${cur.lat.toFixed(2)}°, ${cur.lon.toFixed(2)}°`, cx+12, cy-6);
+  }
+
+  // labels + info de projeção
+  gCtx.fillStyle = '#4a5361';
+  gCtx.font = '9px JetBrains Mono';
+  gCtx.fillText('−180°', 4, gH-4);
+  gCtx.fillText('0°', gW/2+4, gH-4);
+  gCtx.fillText('+180°', gW-36, gH-4);
+  const [_t, topY] = projLL(75, 0, gW, gH, proj);
+  const [_b, botY] = projLL(-75, 0, gW, gH, proj);
+  gCtx.fillText(proj === 'mercator' ? '+85°' : '+90°', 4, 12);
+  gCtx.fillText('0°', 4, eqY-2);
+  gCtx.fillText(proj === 'mercator' ? '−85°' : '−90°', 4, gH-14);
+
+  // contador de pontos
+  gCtx.fillStyle = '#6b7280';
+  gCtx.font = '9px JetBrains Mono';
+  gCtx.textAlign = 'right';
+  gCtx.fillText(`${tr.length} pts · ${proj.toUpperCase()}`, gW-6, 12);
+  gCtx.textAlign = 'left';
+}
+
+/* =============================================================
+   LOOP PRINCIPAL
+   ============================================================= */
+function applyLaunchConfig(){
+  // converte input de altitude em semi-maior-eixo, assumindo que é altitude do apogeu
+  const alt = parseFloat(document.getElementById('alt').value);
+  const e = parseFloat(document.getElementById('ecc').value);
+  const i = parseFloat(document.getElementById('inc').value) * DEG;
+  const raan = parseFloat(document.getElementById('raan').value) * DEG;
+  const argp = parseFloat(document.getElementById('argp').value) * DEG;
+  const nu = parseFloat(document.getElementById('nu').value) * DEG;
+  const ra = RE + alt;                  // raio de apogeu
+  const a = ra / (1 + e);               // a = r_a / (1+e)  dado apogeu
+  sim.cfg.alt = alt;
+  sim.cfg.inc = i*RAD;
+  sim.cfg.ecc = e;
+  sim.cfg.raan = raan*RAD;
+  sim.cfg.argp = argp*RAD;
+  sim.cfg.nu = nu*RAD;
+  const st = kepToState(a, e, i, raan, argp, nu);
+  sim.r = st.r; sim.v = st.v;
+  sim.kep = stateToKep(sim.r, sim.v);
+}
+
+function resetSimulation(){
+  sim.phase = 'pre';
+  sim.t = 0; sim.tLaunch = 0;
+  sim.running = false;
+  sim.trail = [];
+  sim.groundTrail = [];
+  // reset energy state
+  sim.E_wheel = 0;
+  sim.E_mag = 0;
+  sim.P_wheel_cur = 0;
+  sim.P_mag_cur = 0;
+  sim.P_gen_cur = 0;
+  sim.P_load_cur = 0;
+  sim.P_panel = [0, 0];
+  sim.batt_soc = 0.65;
+  sim.batt_hist = [];
+  sim.power_hist = [];
+  sim._lastPowerSample = 0;
+  sim.inEclipse = false;
+  sim.imagingOK = false;
+  sim.B_body_prev = null;
+  sim.T_wheel_cur = [0,0,0];
+  applyLaunchConfig();
+  // reset atitude
+  const pert = parseFloat(document.getElementById('pert').value) * DEG;
+  sim.q = Q.fromAxisAngle([1,1,0.3], pert);
+  sim.omega = [0.0005, 0.0003, -0.0002];
+  satGroup.visible = false;
+  rocketGroup.visible = false;
+  updateUI();
+  updatePhaseLabel();
+}
+
+function startLaunch(){
+  applyLaunchConfig();
+  sim.phase = 'launch';
+  sim.running = true;
+  sim.tLaunch = 0;
+  sim.trail = [];
+  sim.groundTrail = [];
+  // reset atitude
+  const pert = parseFloat(document.getElementById('pert').value) * DEG;
+  sim.q = Q.fromAxisAngle([1,1,0.3], pert);
+  sim.omega = [0.0005, 0.0003, -0.0002];
+  rocketGroup.visible = true;
+  satGroup.visible = false;
+  updatePhaseLabel();
+}
+
+function updatePhaseLabel(){
+  const phaseEl = document.getElementById('phase');
+  const statusInd = document.getElementById('status-ind');
+  const statusTxt = document.getElementById('status-txt');
+  if(sim.phase === 'pre'){
+    phaseEl.textContent = 'Pré-lançamento';
+    statusInd.className = 'status pre'; statusTxt.textContent = 'Standby';
+  } else if(sim.phase === 'launch'){
+    const stage = rocketGroup.userData && rocketGroup.userData.currentStage;
+    const stageTxt = {
+      'sic':         'S-IC · F-1 × 5 (primeiro estágio)',
+      'sii':         'S-II · J-2 × 5 (segundo estágio)',
+      'sivb':        'S-IVB · J-2 (terceiro estágio)',
+      'payload-prep':'Coast · LES ejetado · Prep deploy'
+    }[stage] || 'Subida · Gravity turn';
+    phaseEl.textContent = stageTxt;
+    statusInd.className = 'status pre'; statusTxt.textContent = 'Ascensão';
+  } else if(sim.phase === 'orbit'){
+    phaseEl.textContent = sim.cfg.useJ2 ? 'Órbita · propagação J₂' : 'Órbita · Kepleriano';
+    statusInd.className = 'status flight'; statusTxt.textContent = 'Em órbita';
+  }
+}
+
+/* simulação do lançamento (visual; parâmetro único t_launch, com staging) */
+function updateRocketStages(u){
+  const s = rocketGroup.userData;
+  if(u < 0.30){
+    // S-IC queimando (~150s reais ≈ primeiro estágio)
+    s.sic.visible = true;  s.is1.visible = true;
+    s.sii.visible = true;  s.is2.visible = true;
+    s.sivb.visible = true; s.sm.visible = true;
+    s.cm.visible = true;   s.les.visible = true;
+    s.flame.visible = true;
+    s.flame.position.z = -30;
+    s.flame.scale.set(1.0, 1.0, 1.0);
+    s.currentStage = 'sic';
+  } else if(u < 0.70){
+    // S-II (segundo estágio) - S-IC + interstage dropped
+    s.sic.visible = false; s.is1.visible = false;
+    s.sii.visible = true;  s.is2.visible = true;
+    s.sivb.visible = true; s.sm.visible = true;
+    s.cm.visible = true;   s.les.visible = true;
+    s.flame.visible = true;
+    s.flame.position.z = 54;
+    s.flame.scale.set(0.82, 1.0, 0.82);
+    s.currentStage = 'sii';
+  } else if(u < 0.95){
+    // S-IVB (terceiro estágio) - S-II dropped
+    s.sic.visible = false; s.is1.visible = false;
+    s.sii.visible = false; s.is2.visible = false;
+    s.sivb.visible = true; s.sm.visible = true;
+    s.cm.visible = true;   s.les.visible = true;
+    s.flame.visible = true;
+    s.flame.position.z = 128;
+    s.flame.scale.set(0.40, 0.75, 0.40);
+    s.currentStage = 'sivb';
+  } else {
+    // LES jettison + coast/prep for payload deploy
+    s.sic.visible = false; s.is1.visible = false;
+    s.sii.visible = false; s.is2.visible = false;
+    s.sivb.visible = true; s.sm.visible = true;
+    s.cm.visible = true;   s.les.visible = false;  // torre de escape ejetada
+    s.flame.visible = false;
+    s.currentStage = 'payload-prep';
+  }
+}
+
+function simulateLaunch(dt){
+  sim.tLaunch += dt;
+  const T = sim.launchDuration;
+  const u = Math.min(1, sim.tLaunch / T);
+
+  // atualizar visibilidade dos estágios
+  updateRocketStages(u);
+
+  // posição do sítio em ECI no instante atual (Terra rotaciona via GMST real)
+  const theta = gmstFromJD(currentJD());
+  const sitePosECEF = geoToEcef(sim.cfg.lat, sim.cfg.lon, 0);
+  const c = Math.cos(theta), s = Math.sin(theta);
+  const sitePosECI = [c*sitePosECEF[0] - s*sitePosECEF[1], s*sitePosECEF[0] + c*sitePosECEF[1], sitePosECEF[2]];
+
+  // ponto de inserção orbital
+  applyLaunchConfig();
+  const insertPos = sim.r.slice();
+  const insertVel = sim.v.slice();
+
+  // trajetória Bézier quadrática sítio → apogeu → inserção
+  const up = V.norm(sitePosECI);
+  const ctrl = V.add(sitePosECI, V.scl(up, (V.mag(insertPos)-RE)*0.5));
+  const ease = 1 - Math.pow(1-u, 2.3);
+  const p1 = V.scl(sitePosECI, (1-ease)*(1-ease));
+  const p2 = V.scl(ctrl, 2*(1-ease)*ease);
+  const p3 = V.scl(insertPos, ease*ease);
+  const pos = V.add(V.add(p1,p2), p3);
+
+  rocketGroup.position.set(pos[0], pos[1], pos[2]);
+
+  // orientação: nose (+Z local do foguete) aponta para dirMix
+  const dirT = V.norm(V.sub(insertPos, sitePosECI));
+  const zup = V.norm(pos);
+  const dirMix = V.norm(V.add(V.scl(zup, 1-u*0.9), V.scl(dirT, u*0.9)));
+  const localForward = new THREE.Vector3(0, 0, 1);
+  const target = new THREE.Vector3(dirMix[0], dirMix[1], dirMix[2]);
+  rocketGroup.quaternion.setFromUnitVectors(localForward, target);
+
+  // flame flicker (multiplicativo sobre scale base do estágio)
+  const f = rocketGroup.userData.flame;
+  if(f.visible){
+    const bx = f.scale.x, by = f.scale.y, bz = f.scale.z;
+    // pequena variação aleatória pra simular combustão (restaura na próxima call via updateRocketStages)
+    f.scale.set(bx*(1+Math.random()*0.15), by*(1+Math.random()*0.1), bz*(1+Math.random()*0.15));
+  }
+
+  // atualiza trilha ECI durante subida
+  if(Math.floor(sim.tLaunch) % 3 === 0 && sim.tLaunch - (sim._lastTrailPush||0) > 2){
+    sim._lastTrailPush = sim.tLaunch;
+    sim.trail.push(pos.slice());
+    if(sim.trail.length > trailMax) sim.trail.shift();
+    const ecef = eciToEcef(pos, theta);
+    const g = ecefToGeo(ecef);
+    sim.groundTrail.push({ lat: g.lat, lon: g.lon, alt: g.alt });
+  }
+
+  if(u >= 1){
+    // payload separation → começa propagação orbital
+    sim.phase = 'orbit';
+    sim.r = insertPos; sim.v = insertVel;
+    rocketGroup.visible = false;
+    satGroup.visible = true;
+    updatePhaseLabel();
+  }
+}
+
+/* propagar órbita com J2 */
+function propagateOrbit(dt){
+  // subpassos para estabilidade
+  const maxStep = 5; // s
+  let remaining = dt;
+  while(remaining > 0){
+    const step = Math.min(maxStep, remaining);
+    const res = rk4Step(sim.r, sim.v, step, sim.cfg.useJ2);
+    sim.r = res.r; sim.v = res.v;
+    remaining -= step;
+  }
+  sim.kep = stateToKep(sim.r, sim.v);
+
+  // trail
+  sim.trail.push(sim.r.slice());
+  const T = sim.kep.T;
+  const maxTrail = Math.min(trailMax, Math.ceil(T * 0.8));
+  while(sim.trail.length > maxTrail) sim.trail.shift();
+
+  // ground track usando GMST real
+  const theta = gmstFromJD(currentJD());
+  const rECEF = eciToEcef(sim.r, theta);
+  const geo = ecefToGeo(rECEF);
+  sim.groundTrail.push({ lat: geo.lat, lon: geo.lon, alt: geo.alt });
+  while(sim.groundTrail.length > sim.groundTrailMax) sim.groundTrail.shift();
+}
+
+/* ==========================================================
+   CONTROLADOR PD DE ATITUDE (reaction wheels)
+   Minimiza erro de apontamento nadir. Retorna torque [N·m] no body.
+   Lei: τ = -Kp·q_err_vec - Kd·ω_body
+   q_err = q (porque attitude-desejada = identidade no frame orbital,
+   já que -z_body deve apontar p/ nadir quando q = identidade)
+   ========================================================== */
+function computeWheelTorque(q, omega, I, cfg){
+  // parte vetorial do erro de quaternion (assumindo ω_desired = 0 no frame orbital)
+  let qw = q[0], qv = [q[1], q[2], q[3]];
+  // escolher menor caminho (garante qw > 0)
+  if(qw < 0){ qw = -qw; qv = qv.map(v => -v); }
+
+  const Kp = cfg.ctrlKp;
+  const Kd = cfg.ctrlKd;
+
+  const Tx = -Kp*qv[0] - Kd*omega[0];
+  const Ty = -Kp*qv[1] - Kd*omega[1];
+  const Tz = -Kp*qv[2] - Kd*omega[2];
+
+  // saturação (simula torque máximo das reaction wheels)
+  const Tmag = Math.sqrt(Tx*Tx + Ty*Ty + Tz*Tz);
+  if(Tmag > cfg.ctrlTmax){
+    const s = cfg.ctrlTmax / Tmag;
+    return [Tx*s, Ty*s, Tz*s];
+  }
+  return [Tx, Ty, Tz];
+}
+
+/* propagar atitude com subpassos (estabilidade a alta time-rate) */
+function propagateAttitude(dt){
+  if(sim.phase !== 'orbit') return;
+
+  // atualizar inércia com boom
+  const baseI = [
+    parseFloat(document.getElementById('i1').value),
+    parseFloat(document.getElementById('i2').value),
+    parseFloat(document.getElementById('i3').value)
+  ];
+  const L = sim.boomL;
+  const m = sim.boomM;
+  sim.I = [
+    baseI[0] + m*L*L,
+    baseI[1] + m*L*L,
+    baseI[2]
+  ];
+
+  // mean motion
+  if(!sim.kep || !isFinite(sim.kep.a) || sim.kep.a <= 0) return;
+  const n_orb = Math.sqrt(MU / Math.pow(sim.kep.a, 3));
+
+  // === subpassos: crítico p/ estabilidade a ×3600+ ===
+  const MAX_SUBSTEP = 2.0;  // segundos — RK4 de Euler eqs com dt>5s diverge
+  let remaining = dt;
+
+  // acumuladores de energia durante o intervalo
+  let wheelWork = 0;   // J dissipados pelas wheels neste dt
+  let magWork = 0;     // J dissipados pelos torquers neste dt
+
+  while(remaining > 0){
+    const step = Math.min(MAX_SUBSTEP, remaining);
+
+    // frame orbital LVLH neste substep
+    const rhat = V.norm(sim.r);
+    const hhat = V.norm(V.cross(sim.r, sim.v));
+    const zOrb = rhat;
+    const yOrb = hhat;
+    const xOrb = V.cross(yOrb, zOrb);
+
+    // torque magnético
+    let T_mag = [0, 0, 0];
+    if(sim.cfg.magMode !== 'off'){
+      T_mag = computeMagneticTorque(sim.r, sim.q, xOrb, yOrb, zOrb, sim.cfg, step);
+    } else {
+      const B_eci = magneticFieldECI(sim.r);
+      const B_LVLH = [V.dot(xOrb, B_eci), V.dot(yOrb, B_eci), V.dot(zOrb, B_eci)];
+      sim.B_body_cur = Q.rot(sim.q, B_LVLH);
+      sim.m_cmd_body = [0,0,0];
+      sim.B_body_prev = sim.B_body_cur;
+    }
+
+    // torque de reaction wheels (PD nadir)
+    let T_wheel = [0, 0, 0];
+    if(sim.cfg.ctrlMode === 'pd'){
+      T_wheel = computeWheelTorque(sim.q, sim.omega, sim.I, sim.cfg);
+    }
+    sim.T_wheel_cur = T_wheel;
+
+    // torque externo total
+    const T_ext = V.add(T_mag, T_wheel);
+
+    // potência instantânea dissipada: P = τ · ω (trabalho mecânico)
+    // + perdas ôhmicas nos torquers mag: P_ohm = (|m|·R_coil) modelado simples
+    const P_wheel = Math.abs(V.dot(T_wheel, sim.omega));  // W
+    const P_mag = V.mag(sim.m_cmd_body || [0,0,0]) * 0.5;  // W/(A·m²) — coeficiente empírico
+    wheelWork += P_wheel * step;
+    magWork += P_mag * step;
+
+    // RK4 de um substep
+    const c_body_fn = (qi) => Q.rot(qi, [0,0,-1]);
+    const res = attitudeStep(sim.q, sim.omega, sim.I, step, c_body_fn, n_orb, T_ext);
+
+    // guarda NaN: se algum componente virou NaN/Inf, rollback
+    const allFinite = res.q.every(isFinite) && res.omega.every(isFinite);
+    if(!allFinite){
+      console.warn('[OrbitLab] NaN em propagateAttitude — resetando atitude');
+      sim.q = [1,0,0,0];
+      sim.omega = [0,0,0];
+      return;
+    }
+
+    // limiar de sanidade em ω (sat girando >10 rad/s é irreal — reset)
+    const wmag = V.mag(res.omega);
+    if(wmag > 10){
+      console.warn('[OrbitLab] ω explodindo (', wmag.toFixed(2), 'rad/s) — saturando');
+      sim.omega = V.scl(V.norm(res.omega), 10);
+      sim.q = Q.norm(res.q);
+    } else {
+      sim.q = res.q;
+      sim.omega = res.omega;
+    }
+
+    remaining -= step;
+  }
+
+  // acumula energia dissipada (J → Wh)
+  sim.E_wheel += wheelWork / 3600;   // Wh
+  sim.E_mag += magWork / 3600;       // Wh
+  sim.P_wheel_cur = wheelWork / Math.max(dt, 1e-6);  // W médio no intervalo
+  sim.P_mag_cur = magWork / Math.max(dt, 1e-6);
+}
+
+/* ==========================================================
+   SISTEMA DE POTÊNCIA (painéis solares + bateria)
+   Modelo simplificado mas fisicamente consistente:
+   - Sol em ECI: versor constante (+X_eci é boa aproximação para visualização curta)
+   - Eclipse: sombra cilíndrica da Terra (alinhada com vetor sol)
+   - Incidência por painel: cos(θ) = max(0, n̂·ŝ) no body frame
+   - 2 painéis em ±Y_body (configuração clássica LEO deployable)
+   - Potência: P = A·η·S·cos(θ), S = 1361 W/m² (solar constant)
+   ========================================================== */
+const SOLAR_CONST = 1361;    // W/m² @ 1 AU
+// SUN_ECI agora é dinâmico: sunVectorECI(currentJD()) baseado na época
+
+function isInEclipse(r_eci, sunVec){
+  // sombra cilíndrica: r está em eclipse se
+  // projeção de r no lado oposto ao sol E distância lateral à linha sol-terra < R⊕
+  const rDotS = V.dot(r_eci, sunVec);
+  if(rDotS >= 0) return false;  // mesmo lado que o sol: iluminado
+  // componente lateral
+  const rPar = V.scl(sunVec, rDotS);
+  const rPerp = V.sub(r_eci, rPar);
+  return V.mag(rPerp) < RE;
+}
+
+function updatePowerSystem(dt){
+  const cfg = sim.cfg;
+
+  // === vetor sol dinâmico baseado na época + tempo decorrido ===
+  const jd = currentJD();
+  const sunECI = sunVectorECI(jd);
+  sim.sunECI_cur = sunECI;
+
+  // frame orbital (mesma convenção do atitude)
+  const rhat = V.norm(sim.r);
+  const hhat = V.norm(V.cross(sim.r, sim.v));
+  const zOrb = rhat;
+  const yOrb = hhat;
+  const xOrb = V.cross(yOrb, zOrb);
+
+  // β-angle (ângulo sol-plano_orbital): sin(β) = ŝ · ĥ
+  sim.beta_angle = Math.asin(Math.max(-1, Math.min(1, V.dot(sunECI, hhat)))) * RAD;
+
+  // vetor sol em LVLH → body
+  const sunLVLH = [V.dot(xOrb, sunECI), V.dot(yOrb, sunECI), V.dot(zOrb, sunECI)];
+  const sunBody = Q.rot(sim.q, sunLVLH);
+  sim.sunVec_body = sunBody;
+
+  // eclipse
+  sim.inEclipse = isInEclipse(sim.r, sunECI);
+
+  // === geração de energia por painel ===
+  // Suporta 3 configurações:
+  //   'fixed_pm_y'   : 2 painéis fixos em ±Y_body  (simples, barato, sofre com β baixo)
+  //   'fixed_5face'  : 5 faces body-mounted (+Y,-Y,+X,-X,+Z)  (cubesat grande)
+  //   'sada_1dof_y'  : asa deployable com gimbal 1-eixo em Y_body (padrão missões reais)
+  const panelCfg = cfg.panelConfig;
+  const A = cfg.panelArea;        // m² por painel base
+  const eta = cfg.panelEff;
+  let pGen = 0;
+  const panels = [];
+
+  if(!sim.inEclipse){
+    if(panelCfg === 'fixed_pm_y'){
+      // +Y e -Y, cada 1·A
+      const c1 = Math.max(0, sunBody[1]);
+      const c2 = Math.max(0, -sunBody[1]);
+      panels.push(A * eta * SOLAR_CONST * c1);
+      panels.push(A * eta * SOLAR_CONST * c2);
+    } else if(panelCfg === 'fixed_5face'){
+      // 5 faces (exclui -Z = nadir, que recebe albedo desprezível neste modelo)
+      const faces = [
+        [0, 1, 0],  // +Y
+        [0, -1, 0], // -Y
+        [1, 0, 0],  // +X
+        [-1, 0, 0], // -X
+        [0, 0, 1]   // +Z (zenith)
+      ];
+      for(const n of faces){
+        const c = Math.max(0, n[0]*sunBody[0] + n[1]*sunBody[1] + n[2]*sunBody[2]);
+        panels.push(A * eta * SOLAR_CONST * c);
+      }
+    } else if(panelCfg === 'sada_1dof_y'){
+      // asa deployable: painel grande (2·A) com normal no plano X-Z do body
+      // o SADA gira o painel em torno de Y_body p/ maximizar n·ŝ
+      // sol projetado no plano x-z do body:
+      const sx = sunBody[0], sy = sunBody[1], sz = sunBody[2];
+      const sxz = Math.sqrt(sx*sx + sz*sz);
+      // cos(θ) entre normal ótima e sol verdadeiro = sxz (pois n fica no plano x-z)
+      panels.push(2*A * eta * SOLAR_CONST * sxz);
+      // guardar ângulo do SADA (p/ visualização)
+      sim.sadaAngle = Math.atan2(sx, sz);  // 0 quando sol em +Z (zenith), π/2 em +X
+    }
+  } else {
+    if(panelCfg === 'fixed_pm_y') panels.push(0, 0);
+    else if(panelCfg === 'fixed_5face') panels.push(0, 0, 0, 0, 0);
+    else panels.push(0);
+  }
+  pGen = panels.reduce((s,p) => s+p, 0);
+  sim.P_panel = panels;
+  sim.P_gen_cur = pGen;
+
+  // erro de apontamento nadir (°)
+  const c_body = Q.rot(sim.q, [0,0,-1]);
+  const nadirCos = Math.max(-1, Math.min(1, -c_body[2]));
+  const errNadir_deg = Math.acos(nadirCos) * 180/Math.PI;
+  sim.imagingOK = errNadir_deg < cfg.imagingMaxErr && !sim.inEclipse;
+
+  // consumo total
+  let pLoad = cfg.powerBaseline;
+  pLoad += sim.P_wheel_cur || 0;
+  pLoad += sim.P_mag_cur || 0;
+  if(sim.imagingOK) pLoad += cfg.powerImaging;
+  sim.P_load_cur = pLoad;
+
+  // atualização da bateria: dE = (P_gen - P_load) · dt
+  const battE_cur = sim.batt_soc * cfg.battCap;
+  const dE = (pGen - pLoad) * dt / 3600;
+  const battE_new = Math.max(0, Math.min(cfg.battCap, battE_cur + dE));
+  sim.batt_soc = battE_new / cfg.battCap;
+
+  // histórico pra mini-chart (amostra a cada ~30s de sim)
+  if(sim.t - (sim._lastPowerSample || 0) > 30){
+    sim._lastPowerSample = sim.t;
+    sim.batt_hist.push({ t: sim.t, soc: sim.batt_soc, eclipse: sim.inEclipse, imaging: sim.imagingOK });
+    sim.power_hist.push({ t: sim.t, gen: pGen, load: pLoad });
+    while(sim.batt_hist.length > 500) sim.batt_hist.shift();
+    while(sim.power_hist.length > 500) sim.power_hist.shift();
+  }
+}
+
+
+function tick(){
+  const now = performance.now();
+  let wallDt = (now - sim.lastWall) / 1000;
+  sim.lastWall = now;
+  wallDt = Math.min(0.1, wallDt); // clamp
+
+  if(sim.running){
+    const dt = wallDt * sim.rate;
+    sim.t += dt;
+    if(sim.phase === 'launch'){
+      simulateLaunch(dt);
+      updatePhaseLabel();  // reflete troca de estágio em tempo real
+    }
+    if(sim.phase === 'orbit'){
+      propagateOrbit(dt);
+      propagateAttitude(dt);
+      updatePowerSystem(dt);
+    }
+  }
+
+  // render
+  updateOrbitScene();
+  updateAttitudeScene();
+  drawGroundTrack();
+  drawSolarCanvas();
+  drawBatteryCanvas();
+  updateUI();
+
+  requestAnimationFrame(tick);
+}
+
+function updateOrbitScene(){
+  // rotação da Terra em ECI via GMST real (da época + tempo decorrido)
+  const jd = currentJD();
+  const theta = gmstFromJD(jd);
+  earthGroup.rotation.z = theta;
+
+  // nuvens giram ~2% mais rápido que a Terra (efeito visual)
+  if(cloudsMesh){
+    cloudsMesh.rotation.z = -OMEGA_EARTH * sim.t * 0.04;  // deriva sutil relativa à Terra
+  }
+
+  // atualiza direção da luz solar com a efeméride real
+  const sunECI = sunVectorECI(jd);
+  sunLight.position.set(sunECI[0]*200000, sunECI[1]*200000, sunECI[2]*200000);
+
+  // atualiza marcador do sítio (posição no ECEF fixo → rotaciona com earthGroup)
+  const sitePosECEF = geoToEcef(sim.cfg.lat, sim.cfg.lon, 0);
+  siteMarker.position.set(sitePosECEF[0], sitePosECEF[1], sitePosECEF[2]);
+  sitePulse.position.copy(siteMarker.position);
+  const pulseS = 1 + 0.3*Math.sin(performance.now()*0.004);
+  sitePulse.scale.set(pulseS, pulseS, pulseS);
+
+  // posição do satélite/foguete em ECI (não rotaciona com Terra)
+  if(sim.phase === 'orbit' && satGroup.visible){
+    satGroup.position.set(sim.r[0], sim.r[1], sim.r[2]);
+    // orientação: aponta o +z do satGroup para a Terra (nadir)
+    const look = new THREE.Vector3(-sim.r[0], -sim.r[1], -sim.r[2]).normalize();
+    const up = new THREE.Vector3().crossVectors(new THREE.Vector3(sim.v[0], sim.v[1], sim.v[2]), look).normalize();
+    // construir quaternion
+    const m = new THREE.Matrix4();
+    const axis_y = new THREE.Vector3().crossVectors(look, new THREE.Vector3(sim.v[0], sim.v[1], sim.v[2])).normalize();
+    m.lookAt(new THREE.Vector3(0,0,0), look, up);
+    satGroup.quaternion.setFromRotationMatrix(m);
+  }
+
+  // atualizar trilha
+  const n = sim.trail.length;
+  trailGeo.setDrawRange(0, n);
+  for(let i=0;i<n;i++){
+    trailPositions[i*3  ] = sim.trail[i][0];
+    trailPositions[i*3+1] = sim.trail[i][1];
+    trailPositions[i*3+2] = sim.trail[i][2];
+  }
+  trailGeo.attributes.position.needsUpdate = true;
+
+  orbitRenderer.render(orbitScene, orbitCam);
+}
+
+function updateAttitudeScene(){
+  // aplicar quaternion ao sat3
+  const [w, x, y, z] = sim.q;
+  const tq = new THREE.Quaternion(x, y, z, w);
+  sat3.quaternion.copy(tq);
+  // boom length visual
+  updateBoomVisual(sim.boomL);
+  attRenderer.render(attScene, attCam);
+}
+
+/* ===== UI updates ===== */
+/* ============================================================
+   RENDER — canvas painéis solares (diagrama polar de incidência)
+   ============================================================ */
+const solarCanvas = document.getElementById('solar-canvas');
+const solarCtx = solarCanvas ? solarCanvas.getContext('2d') : null;
+
+function drawSolarCanvas(){
+  if(!solarCtx) return;
+  const dpr = window.devicePixelRatio || 1;
+  const W = solarCanvas.clientWidth, H = solarCanvas.clientHeight;
+  if(solarCanvas.width !== W*dpr){
+    solarCanvas.width = W*dpr;
+    solarCanvas.height = H*dpr;
+    solarCtx.setTransform(dpr,0,0,dpr,0,0);
+  }
+  const ctx = solarCtx;
+  ctx.fillStyle = '#05070b';
+  ctx.fillRect(0,0,W,H);
+
+  const cx = W/2, cy = H/2;
+  const R = Math.min(W,H)*0.38;
+
+  // grid polar
+  ctx.strokeStyle = '#1a2330';
+  ctx.lineWidth = 1;
+  for(let i=1; i<=4; i++){
+    ctx.beginPath(); ctx.arc(cx,cy,R*i/4,0,Math.PI*2); ctx.stroke();
+  }
+  // eixos body x,y (plano XY do body visto "de cima")
+  ctx.strokeStyle = '#2a3646';
+  ctx.beginPath(); ctx.moveTo(cx-R,cy); ctx.lineTo(cx+R,cy); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx,cy-R); ctx.lineTo(cx,cy+R); ctx.stroke();
+  ctx.fillStyle = '#4a5361';
+  ctx.font = '9px JetBrains Mono';
+  ctx.fillText('+X_body', cx+R+4, cy+3);
+  ctx.fillText('+Y_body', cx+4, cy-R-4);
+  ctx.fillText('−X', cx-R-18, cy+3);
+  ctx.fillText('−Y', cx+4, cy+R+10);
+
+  const sun = sim.sunVec_body || [0,0,1];
+  const inEcl = sim.inEclipse;
+  const cfg = sim.cfg.panelConfig;
+
+  // corpo do satélite (caixa central)
+  ctx.fillStyle = '#1a1f28';
+  ctx.strokeStyle = '#9dd6b4';
+  ctx.lineWidth = 1.2;
+
+  const drawPanel = (cxp, cyp, w, h, angle, coeff, label) => {
+    ctx.save();
+    ctx.translate(cxp, cyp);
+    ctx.rotate(angle);
+    const col = inEcl ? '#2a2e3a' : `rgba(244, 184, 96, ${0.25 + 0.75*Math.max(0,coeff)})`;
+    ctx.fillStyle = col;
+    ctx.strokeStyle = '#6a7380';
+    ctx.fillRect(-w/2, -h/2, w, h);
+    ctx.strokeRect(-w/2, -h/2, w, h);
+    // padrão de células (linhas internas)
+    ctx.strokeStyle = 'rgba(100,110,120,0.5)';
+    ctx.lineWidth = 0.5;
+    for(let i=1; i<5; i++){
+      ctx.beginPath(); ctx.moveTo(-w/2, -h/2 + h*i/5); ctx.lineTo(w/2, -h/2 + h*i/5); ctx.stroke();
+    }
+    ctx.restore();
+    if(label){
+      ctx.fillStyle = '#9dd6b4';
+      ctx.font = '9px JetBrains Mono';
+      ctx.textAlign = 'center';
+      ctx.fillText(`${(Math.max(0,coeff)*100).toFixed(0)}%`, cxp, cyp + (coeff>0 ? -h/2-5 : h/2+12));
+      ctx.textAlign = 'left';
+    }
+  };
+
+  if(cfg === 'fixed_pm_y'){
+    // body no centro
+    ctx.fillRect(cx-14, cy-14, 28, 28);
+    ctx.strokeRect(cx-14, cy-14, 28, 28);
+    // +Y (em cima)
+    drawPanel(cx, cy - R*0.55, R*0.25, R*0.7, 0, inEcl ? 0 : Math.max(0, sun[1]), true);
+    // -Y (embaixo)
+    drawPanel(cx, cy + R*0.55, R*0.25, R*0.7, 0, inEcl ? 0 : Math.max(0, -sun[1]), true);
+  } else if(cfg === 'fixed_5face'){
+    // cubo expandido (nadir = -Z não tem painel, mas o body é visto no plano XY)
+    const bodyS = R*0.3;
+    ctx.fillRect(cx-bodyS/2, cy-bodyS/2, bodyS, bodyS);
+    ctx.strokeRect(cx-bodyS/2, cy-bodyS/2, bodyS, bodyS);
+    // 4 faces laterais (+X, -X, +Y, -Y)
+    drawPanel(cx + R*0.55, cy, R*0.18, R*0.6, Math.PI/2, inEcl ? 0 : Math.max(0, sun[0]), true);   // +X
+    drawPanel(cx - R*0.55, cy, R*0.18, R*0.6, Math.PI/2, inEcl ? 0 : Math.max(0, -sun[0]), true);  // -X
+    drawPanel(cx, cy - R*0.55, R*0.6, R*0.18, 0, inEcl ? 0 : Math.max(0, sun[1]), true);           // +Y
+    drawPanel(cx, cy + R*0.55, R*0.6, R*0.18, 0, inEcl ? 0 : Math.max(0, -sun[1]), true);          // -Y
+    // +Z (zenith) — mostrado como "topo" pequeno no body
+    const cZ = inEcl ? 0 : Math.max(0, sun[2]);
+    ctx.fillStyle = inEcl ? '#2a2e3a' : `rgba(244, 184, 96, ${0.25 + 0.75*cZ})`;
+    ctx.fillRect(cx-bodyS/2, cy-bodyS/2, bodyS, bodyS);
+    ctx.strokeStyle = '#6a7380';
+    ctx.strokeRect(cx-bodyS/2, cy-bodyS/2, bodyS, bodyS);
+    ctx.fillStyle = '#9dd6b4';
+    ctx.font = '9px JetBrains Mono';
+    ctx.textAlign = 'center';
+    ctx.fillText(`+Z ${(cZ*100).toFixed(0)}%`, cx, cy+3);
+    ctx.textAlign = 'left';
+  } else if(cfg === 'sada_1dof_y'){
+    // asa deployable — 1 painel grande em gimbal Y
+    // body menor centro
+    ctx.fillRect(cx-10, cy-10, 20, 20);
+    ctx.strokeRect(cx-10, cy-10, 20, 20);
+    // eixo do SADA (linha tracejada ao longo de Y)
+    ctx.setLineDash([3,3]);
+    ctx.strokeStyle = '#f4b860';
+    ctx.beginPath(); ctx.moveTo(cx, cy - R*0.95); ctx.lineTo(cx, cy + R*0.95); ctx.stroke();
+    ctx.setLineDash([]);
+    // o SADA gira o painel em torno de Y pra seguir o sol no plano X-Z
+    // no diagrama (plano XY), o painel é visto de lado — mostramos a projeção
+    // ângulo do SADA: sadaAngle = atan2(sun_x, sun_z) — painel é perpendicular a esse vetor
+    const sada = sim.sadaAngle || 0;
+    // no diagrama 2D (plano XY), o painel aparece como um traço rotacionado
+    // na verdade ele se estende em Y (largura) e perpendicular a sun_xz (espessura)
+    // vamos desenhar como 2 "asas" em +Y e -Y, rotacionando a normal
+    const cosθ = Math.sqrt(sun[0]*sun[0] + sun[2]*sun[2]);  // cos entre normal ótima e sol
+    // normal projeção no plano XY = [sin(sada), 0, cos(sada)] → projeção em X = sin(sada)
+    const nx_proj = Math.sin(sada);  // projeção da normal em X
+    const alpha = inEcl ? 0.15 : (0.25 + 0.75*cosθ);
+    ctx.fillStyle = `rgba(244, 184, 96, ${alpha})`;
+    ctx.strokeStyle = '#9dd6b4';
+    ctx.lineWidth = 1.5;
+    // duas asas ao longo do eixo Y, cada uma "inclinada" conforme sada
+    // na projeção XY vemos um retângulo cujo comprimento ao longo de X depende de |nx_proj|
+    // painel real tem "espessura" na direção X quando rotacionado
+    const wingLen = R*0.78;
+    const wingW = R*0.06 + R*0.20*Math.abs(nx_proj);  // vai de fino a largo
+    // asa +Y
+    ctx.fillRect(cx - wingW/2, cy - R*0.9, wingW, wingLen*0.5);
+    ctx.strokeRect(cx - wingW/2, cy - R*0.9, wingW, wingLen*0.5);
+    // asa -Y
+    ctx.fillRect(cx - wingW/2, cy + R*0.05, wingW, wingLen*0.5);
+    ctx.strokeRect(cx - wingW/2, cy + R*0.05, wingW, wingLen*0.5);
+    // indicador do ângulo do SADA
+    ctx.fillStyle = '#f4b860';
+    ctx.font = '9px JetBrains Mono';
+    ctx.textAlign = 'center';
+    ctx.fillText(`SADA: ${(sada*180/Math.PI).toFixed(0)}°`, cx, cy + R*0.98);
+    ctx.fillText(`η: ${(cosθ*100).toFixed(0)}%`, cx, cy - R*0.95);
+    ctx.textAlign = 'left';
+  }
+
+  // vetor sol no body (projetado no plano X-Y do body)
+  if(!inEcl){
+    const sxy = Math.sqrt(sun[0]*sun[0] + sun[1]*sun[1]);
+    if(sxy > 0.01){
+      const sx = sun[0]/sxy;
+      const sy = sun[1]/sxy;
+      const alpha = Math.min(1, 0.3 + sxy*0.7);
+      ctx.strokeStyle = `rgba(244, 184, 96, ${alpha})`;
+      ctx.lineWidth = 2;
+      const ex = cx + sx*R*0.92;
+      const ey = cy - sy*R*0.92;
+      ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(ex, ey); ctx.stroke();
+      const ang = Math.atan2(-sy, sx);
+      ctx.beginPath();
+      ctx.moveTo(ex, ey);
+      ctx.lineTo(ex - 8*Math.cos(ang - 0.4), ey - 8*Math.sin(ang - 0.4));
+      ctx.lineTo(ex - 8*Math.cos(ang + 0.4), ey - 8*Math.sin(ang + 0.4));
+      ctx.closePath();
+      ctx.fillStyle = `rgba(244, 184, 96, ${alpha})`;
+      ctx.fill();
+      ctx.fillStyle = '#f4b860';
+      ctx.beginPath(); ctx.arc(ex, ey, 5, 0, Math.PI*2); ctx.fill();
+      ctx.font = '9px JetBrains Mono';
+      ctx.fillText('☉', ex+8, ey+3);
+    }
+  } else {
+    ctx.fillStyle = 'rgba(232, 93, 117, 0.15)';
+    ctx.fillRect(0,0,W,H);
+    ctx.fillStyle = '#e85d75';
+    ctx.font = '11px JetBrains Mono';
+    ctx.textAlign = 'center';
+    ctx.fillText('ECLIPSE · painéis escuros', cx, H-12);
+    ctx.textAlign = 'left';
+  }
+}
+
+/* ============================================================
+   RENDER — strip chart bateria (SoC + P_gen/P_load)
+   ============================================================ */
+const batteryCanvas = document.getElementById('battery-canvas');
+const battCtx = batteryCanvas ? batteryCanvas.getContext('2d') : null;
+
+function drawBatteryCanvas(){
+  if(!battCtx) return;
+  const dpr = window.devicePixelRatio || 1;
+  const W = batteryCanvas.clientWidth, H = batteryCanvas.clientHeight;
+  if(batteryCanvas.width !== W*dpr){
+    batteryCanvas.width = W*dpr;
+    batteryCanvas.height = H*dpr;
+    battCtx.setTransform(dpr,0,0,dpr,0,0);
+  }
+  const ctx = battCtx;
+  ctx.fillStyle = '#05070b';
+  ctx.fillRect(0,0,W,H);
+
+  const hist = sim.batt_hist;
+  const phist = sim.power_hist;
+  if(hist.length < 2){
+    ctx.fillStyle = '#4a5361';
+    ctx.font = '10px JetBrains Mono';
+    ctx.fillText('Aguardando dados orbitais...', 12, H/2);
+    return;
+  }
+
+  const t0 = hist[0].t;
+  const t1 = hist[hist.length-1].t;
+  const tRange = Math.max(t1 - t0, 1);
+
+  const padL = 36, padR = 8, padT = 10, padB = 22;
+  const plotW = W - padL - padR;
+  const plotH = H - padT - padB;
+
+  // grid horizontal (SoC 0-100%)
+  ctx.strokeStyle = '#1a2330';
+  ctx.lineWidth = 1;
+  for(let i=0; i<=4; i++){
+    const y = padT + plotH*i/4;
+    ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(W-padR, y); ctx.stroke();
+    ctx.fillStyle = '#4a5361';
+    ctx.font = '8px JetBrains Mono';
+    ctx.fillText(`${100 - 25*i}%`, 4, y+3);
+  }
+
+  // faixas de eclipse (fundo)
+  ctx.fillStyle = 'rgba(106, 115, 128, 0.25)';
+  for(let i=0; i<hist.length; i++){
+    if(hist[i].eclipse){
+      const x = padL + (hist[i].t - t0)/tRange * plotW;
+      const xNext = padL + ((hist[i+1] ? hist[i+1].t : hist[i].t+30) - t0)/tRange * plotW;
+      ctx.fillRect(x, padT, Math.max(1, xNext-x), plotH);
+    }
+  }
+
+  // faixas de imaging (fundo coral)
+  ctx.fillStyle = 'rgba(232, 93, 117, 0.2)';
+  for(let i=0; i<hist.length; i++){
+    if(hist[i].imaging){
+      const x = padL + (hist[i].t - t0)/tRange * plotW;
+      const xNext = padL + ((hist[i+1] ? hist[i+1].t : hist[i].t+30) - t0)/tRange * plotW;
+      ctx.fillRect(x, padT + plotH - 4, Math.max(1, xNext-x), 4);
+    }
+  }
+
+  // linha SoC
+  ctx.strokeStyle = '#9dd6b4';
+  ctx.lineWidth = 1.8;
+  ctx.beginPath();
+  hist.forEach((p, i) => {
+    const x = padL + (p.t - t0)/tRange * plotW;
+    const y = padT + plotH*(1 - p.soc);
+    if(i === 0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+  });
+  ctx.stroke();
+
+  // P_gen (amarelo) e P_load (coral), escalados pela mesma altura em W
+  const allP = phist.flatMap(p => [p.gen, p.load]);
+  const pMax = Math.max(100, ...allP) * 1.1;
+
+  // P_gen
+  ctx.strokeStyle = 'rgba(244, 184, 96, 0.7)';
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  phist.forEach((p, i) => {
+    const x = padL + (p.t - t0)/tRange * plotW;
+    const y = padT + plotH*(1 - p.gen/pMax);
+    if(i === 0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+  });
+  ctx.stroke();
+
+  // P_load
+  ctx.strokeStyle = 'rgba(232, 93, 117, 0.7)';
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  phist.forEach((p, i) => {
+    const x = padL + (p.t - t0)/tRange * plotW;
+    const y = padT + plotH*(1 - p.load/pMax);
+    if(i === 0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+  });
+  ctx.stroke();
+
+  // legenda
+  ctx.font = '9px JetBrains Mono';
+  ctx.fillStyle = '#9dd6b4';
+  ctx.fillText('— SoC', padL+4, padT+10);
+  ctx.fillStyle = '#f4b860';
+  ctx.fillText('— P_gen', padL+52, padT+10);
+  ctx.fillStyle = '#e85d75';
+  ctx.fillText('— P_load', padL+110, padT+10);
+  // eixo X em horas
+  ctx.fillStyle = '#4a5361';
+  const tRangeH = tRange / 3600;
+  ctx.fillText(`Δt ${tRangeH.toFixed(2)} h`, W-padR-68, H-6);
+  // máximo em W
+  ctx.fillText(`max ${pMax.toFixed(0)} W`, padL+4, H-6);
+}
+
+function updateUI(){
+  // mission time
+  const t = Math.floor(sim.t);
+  const hh = String(Math.floor(t/3600)).padStart(2,'0');
+  const mm = String(Math.floor((t%3600)/60)).padStart(2,'0');
+  const ss = String(t%60).padStart(2,'0');
+  document.getElementById('mission-time').textContent = `${hh}:${mm}:${ss}`;
+  document.getElementById('time-rate').textContent = `×${sim.rate}`;
+
+  // === épocas / efemérides ===
+  const jd = currentJD();
+  const gmstDeg = gmstFromJD(jd) * RAD;
+  const sunEci = sunVectorECI(jd);
+  const sunDecl = Math.asin(sunEci[2]) * RAD;
+  document.getElementById('ep-jd').textContent = jd.toFixed(4);
+  document.getElementById('ep-gmst').textContent = gmstDeg.toFixed(2);
+  document.getElementById('ep-sundecl').textContent = sunDecl.toFixed(2);
+  document.getElementById('ep-beta').textContent = (sim.beta_angle != null ? sim.beta_angle.toFixed(2) : '—');
+
+  // elements
+  if(sim.kep){
+    const k = sim.kep;
+    document.getElementById('el-a').textContent = k.a.toFixed(2);
+    document.getElementById('el-e').textContent = k.e.toFixed(5);
+    document.getElementById('el-i').textContent = (k.i*RAD).toFixed(3);
+    document.getElementById('el-raan').textContent = (k.raan*RAD).toFixed(2);
+    document.getElementById('el-argp').textContent = (k.argp*RAD).toFixed(2);
+    document.getElementById('el-nu').textContent = (k.nu*RAD).toFixed(2);
+    document.getElementById('el-alt').textContent = (k.rmag - RE).toFixed(2);
+    document.getElementById('el-vel').textContent = k.vmag.toFixed(4);
+    document.getElementById('el-per').textContent = (k.T/60).toFixed(2);
+
+    document.getElementById('r-mag').textContent = ' ' + k.rmag.toFixed(1);
+    document.getElementById('v-mag').textContent = ' ' + k.vmag.toFixed(3);
+
+    if(sim.groundTrail.length){
+      const c = sim.groundTrail[sim.groundTrail.length-1];
+      document.getElementById('el-latlon').textContent = `${c.lat.toFixed(2)}° / ${c.lon.toFixed(2)}°`;
+    }
+  }
+
+  // attitude
+  const eul = Q.toEuler(sim.q);
+  document.getElementById('att-roll').textContent = (eul.roll*RAD).toFixed(2);
+  document.getElementById('att-pitch').textContent = (eul.pitch*RAD).toFixed(2);
+  document.getElementById('att-yaw').textContent = (eul.yaw*RAD).toFixed(2);
+  document.getElementById('att-w').textContent = (V.mag(sim.omega)*RAD).toFixed(3);
+  // erro de apontamento nadir
+  // c_body = direção à Terra no body frame. No equilíbrio c_body = [0,0,-1] (i.e., -z_body aponta p/ Terra)
+  // O "antenna axis" útil é -z_body (face voltada para Terra em equilíbrio)
+  const c_body = Q.rot(sim.q, [0,0,-1]);
+  const nadirCos = Math.max(-1, Math.min(1, -c_body[2]));  // 1 quando c_body = [0,0,-1]
+  const errNadir = Math.acos(nadirCos) * RAD;
+  document.getElementById('att-err').textContent = errNadir.toFixed(2);
+
+  // badge estabilidade (pitch e roll/yaw)
+  const baseI = [
+    parseFloat(document.getElementById('i1').value),
+    parseFloat(document.getElementById('i2').value),
+    parseFloat(document.getElementById('i3').value)
+  ];
+  const L = sim.boomL, m = sim.boomM;
+  const I = [baseI[0] + m*L*L, baseI[1] + m*L*L, baseI[2]];
+  // critérios clássicos (DeBra-Delp): I2 > I1 > I3 para estabilidade total
+  const ok = (I[1] > I[0]) && (I[0] > I[2]);
+  const badge = document.getElementById('stab-badge');
+  badge.textContent = ok ? 'Estável · I₂>I₁>I₃' : 'Instável';
+  badge.className = 'badge ' + (ok ? 'ok' : 'warn');
+
+  // magnetic telemetry
+  if(sim.B_body_cur){
+    const bMag = V.mag(sim.B_body_cur) * 1e9;  // T → nT
+    document.getElementById('mag-B').textContent = bMag.toFixed(0);
+    const tMag = V.mag(sim.T_mag_cur || [0,0,0]) * 1e6; // Nm → µNm
+    document.getElementById('mag-T').textContent = tMag.toFixed(2);
+    const mMag = V.mag(sim.m_cmd_body || [0,0,0]);
+    document.getElementById('mag-m').textContent = mMag.toFixed(1);
+    const wMag = V.mag(sim.omega) * RAD;   // rad/s → °/s
+    document.getElementById('mag-w').textContent = wMag.toFixed(3);
+  }
+
+  // PD controller readouts
+  const ctrlErrEl = document.getElementById('ctrl-err');
+  if(ctrlErrEl){
+    ctrlErrEl.textContent = errNadir.toFixed(2);
+    const tauRW = V.mag(sim.T_wheel_cur || [0,0,0]) * 1000; // N·m → mN·m
+    document.getElementById('ctrl-tau').textContent = tauRW.toFixed(1);
+    document.getElementById('ctrl-prw').textContent = (sim.P_wheel_cur || 0).toFixed(1);
+    document.getElementById('ctrl-erw').textContent = (sim.E_wheel || 0).toFixed(2);
+  }
+
+  // power panel readouts
+  const pEl = document.getElementById('p-py');
+  if(pEl && sim.P_panel){
+    const cfg = sim.cfg.panelConfig;
+    const pp = sim.P_panel;
+    if(cfg === 'fixed_pm_y'){
+      document.getElementById('p-py').textContent = (pp[0]||0).toFixed(1) + ' W';
+      document.getElementById('p-my').textContent = (pp[1]||0).toFixed(1) + ' W';
+      document.querySelector('#p-py').previousElementSibling.textContent = 'Painel +Y';
+      document.querySelector('#p-my').previousElementSibling.textContent = 'Painel −Y';
+    } else if(cfg === 'fixed_5face'){
+      const top2 = [...pp].sort((a,b)=>b-a).slice(0,2);
+      document.getElementById('p-py').textContent = (top2[0]||0).toFixed(1) + ' W';
+      document.getElementById('p-my').textContent = (top2[1]||0).toFixed(1) + ' W';
+      document.querySelector('#p-py').previousElementSibling.textContent = 'Face #1 (top)';
+      document.querySelector('#p-my').previousElementSibling.textContent = 'Face #2 (top)';
+    } else if(cfg === 'sada_1dof_y'){
+      document.getElementById('p-py').textContent = (pp[0]||0).toFixed(1) + ' W';
+      document.getElementById('p-my').textContent = ((sim.sadaAngle||0) * 180/Math.PI).toFixed(0) + '°';
+      document.querySelector('#p-py').previousElementSibling.textContent = 'Asa SADA';
+      document.querySelector('#p-my').previousElementSibling.textContent = 'Ângulo gimbal';
+    }
+    document.getElementById('p-total').textContent = (sim.P_gen_cur || 0).toFixed(1) + ' W';
+    document.getElementById('p-soc').textContent = (sim.batt_soc * 100).toFixed(1) + '%  ·  ' + (sim.batt_soc * sim.cfg.battCap).toFixed(1) + ' Wh';
+    document.getElementById('p-gen').textContent = (sim.P_gen_cur || 0).toFixed(1) + ' W';
+    document.getElementById('p-load').textContent = (sim.P_load_cur || 0).toFixed(1) + ' W';
+
+    // badges
+    const eclBadge = document.getElementById('eclipse-badge');
+    if(sim.inEclipse){
+      eclBadge.textContent = 'ECLIPSE';
+      eclBadge.className = 'badge warn';
+    } else {
+      eclBadge.textContent = 'SOL';
+      eclBadge.className = 'badge ok';
+    }
+    const imgBadge = document.getElementById('imaging-badge');
+    if(sim.imagingOK){
+      imgBadge.textContent = 'IMAGING OK';
+      imgBadge.className = 'badge ok';
+    } else {
+      imgBadge.textContent = 'IMAGING NO';
+      imgBadge.className = 'badge';
+    }
+
+    // stats globais
+    const Etotal = (sim.E_wheel || 0) + (sim.E_mag || 0);
+    document.getElementById('ps-ew').textContent = (sim.E_wheel || 0).toFixed(3) + ' Wh';
+    document.getElementById('ps-em').textContent = (sim.E_mag || 0).toFixed(3) + ' Wh';
+    document.getElementById('ps-ecorr').textContent = Etotal.toFixed(3) + ' Wh';
+
+    // uptime de imaging (fração de histórico com imaging=true)
+    const h = sim.batt_hist;
+    if(h.length > 5){
+      const imgFrac = h.filter(p => p.imaging).length / h.length;
+      const eclFrac = h.filter(p => p.eclipse).length / h.length;
+      document.getElementById('ps-imguptime').textContent = (imgFrac*100).toFixed(1) + '%';
+      document.getElementById('ps-eclfrac').textContent = (eclFrac*100).toFixed(1) + '%';
+      // custo por órbita: energia do controle / (número de órbitas percorridas)
+      const orbitTime = sim.kep ? sim.kep.T : 5400;
+      const elapsedSec = h[h.length-1].t - h[0].t;
+      const orbits = Math.max(1e-6, elapsedSec / orbitTime);
+      const costPerOrbit = Etotal / orbits;
+      document.getElementById('ps-costorb').textContent = costPerOrbit.toFixed(3) + ' Wh/órbita';
+    } else {
+      document.getElementById('ps-imguptime').textContent = '—';
+      document.getElementById('ps-eclfrac').textContent = '—';
+      document.getElementById('ps-costorb').textContent = '—';
+    }
+  }
+}
+
+/* ============== RESIZING ============== */
+function resize(){
+  const orbRect = document.querySelector('.panel-orbit').getBoundingClientRect();
+  orbitRenderer.setSize(orbRect.width, orbRect.height, false);
+  orbitCam.aspect = orbRect.width / orbRect.height;
+  orbitCam.updateProjectionMatrix();
+
+  const attRect = document.querySelector('.att-body').getBoundingClientRect();
+  attRenderer.setSize(attRect.width, attRect.height, false);
+  attCam.aspect = attRect.width / attRect.height;
+  attCam.updateProjectionMatrix();
+
+  const gRect = document.querySelector('.ground-body').getBoundingClientRect();
+  gCanvas.width = gRect.width * window.devicePixelRatio;
+  gCanvas.height = gRect.height * window.devicePixelRatio;
+  gCanvas.style.width = gRect.width + 'px';
+  gCanvas.style.height = gRect.height + 'px';
+  gCtx.setTransform(window.devicePixelRatio,0,0,window.devicePixelRatio,0,0);
+}
+window.addEventListener('resize', resize);
+
+/* ============== UI bindings ============== */
+// presets de sítio
+const presetsHost = document.getElementById('launch-presets');
+LAUNCH_SITES.forEach((site,idx) => {
+  const el = document.createElement('div');
+  el.className = 'preset' + (idx===0 ? ' active' : '');
+  el.innerHTML = `<div class="site">${site.name}</div><div class="coord">${site.lat.toFixed(3)}° · ${site.lon.toFixed(3)}°</div>`;
+  el.onclick = () => {
+    document.querySelectorAll('.preset').forEach(p=>p.classList.remove('active'));
+    el.classList.add('active');
+    document.getElementById('launch-lat').value = site.lat;
+    document.getElementById('launch-lon').value = site.lon;
+    document.getElementById('lat-val').textContent = site.lat.toFixed(3);
+    document.getElementById('lon-val').textContent = site.lon.toFixed(3);
+    sim.cfg.lat = site.lat; sim.cfg.lon = site.lon;
+  };
+  presetsHost.appendChild(el);
+});
+
+// inputs live
+function bindLive(id, valId, fmt = v => v){
+  const inp = document.getElementById(id);
+  const val = document.getElementById(valId);
+  inp.addEventListener('input', () => {
+    val.textContent = fmt(inp.value);
+    if(id === 'alt') sim.cfg.alt = parseFloat(inp.value);
+    if(id === 'inc') sim.cfg.inc = parseFloat(inp.value)*DEG;
+    if(id === 'ecc') sim.cfg.ecc = parseFloat(inp.value);
+    if(id === 'raan') sim.cfg.raan = parseFloat(inp.value)*DEG;
+    if(id === 'argp') sim.cfg.argp = parseFloat(inp.value)*DEG;
+    if(id === 'nu') sim.cfg.nu = parseFloat(inp.value)*DEG;
+    if(id === 'launch-lat') sim.cfg.lat = parseFloat(inp.value);
+    if(id === 'launch-lon') sim.cfg.lon = parseFloat(inp.value);
+  });
+}
+bindLive('alt', 'alt-val');
+bindLive('inc', 'inc-val');
+bindLive('ecc', 'ecc-val');
+bindLive('raan', 'raan-val');
+bindLive('argp', 'argp-val');
+bindLive('nu', 'nu-val');
+bindLive('launch-lat', 'lat-val');
+bindLive('launch-lon', 'lon-val');
+bindLive('pert', 'pert-val');
+
+// boom
+document.getElementById('boom-l').addEventListener('input', e => {
+  sim.boomL = parseFloat(e.target.value);
+  document.getElementById('boom-l-val').textContent = sim.boomL.toFixed(1) + ' m';
+});
+document.getElementById('boom-m').addEventListener('input', e => {
+  sim.boomM = parseFloat(e.target.value);
+  document.getElementById('boom-m-val').textContent = sim.boomM + ' kg';
+});
+
+// toggles rate
+document.querySelectorAll('#rate-toggle .tg').forEach(t=>{
+  t.onclick = () => {
+    document.querySelectorAll('#rate-toggle .tg').forEach(x=>x.classList.remove('active'));
+    t.classList.add('active');
+    sim.rate = parseFloat(t.dataset.rate);
+  };
+});
+// pert toggle
+document.querySelectorAll('[data-pert]').forEach(t=>{
+  t.onclick = () => {
+    document.querySelectorAll('[data-pert]').forEach(x=>x.classList.remove('active'));
+    t.classList.add('active');
+    sim.cfg.useJ2 = t.dataset.pert === 'j2';
+  };
+});
+// magnetic mode toggle
+document.querySelectorAll('[data-magmode]').forEach(t=>{
+  t.onclick = () => {
+    document.querySelectorAll('[data-magmode]').forEach(x=>x.classList.remove('active'));
+    t.classList.add('active');
+    sim.cfg.magMode = t.dataset.magmode;
+    // reset histórico de B quando troca modo (evita glitch no B-dot)
+    sim.B_body_prev = null;
+  };
+});
+// magnetic manual inputs
+['mag-mx','mag-my','mag-mz'].forEach((id, idx) => {
+  const key = ['magMx','magMy','magMz'][idx];
+  document.getElementById(id).oninput = (e) => {
+    sim.cfg[key] = parseFloat(e.target.value) || 0;
+  };
+});
+// saturação do torquer
+document.getElementById('mag-mmax').oninput = (e) => {
+  sim.cfg.mMax = parseFloat(e.target.value);
+  document.getElementById('mag-max-val').textContent = sim.cfg.mMax;
+};
+// B-dot gain (slider em escala log: 50→1e5, 90→1e9)
+document.getElementById('mag-k').oninput = (e) => {
+  const exp = parseFloat(e.target.value) / 10;  // 5.0 - 9.0
+  sim.cfg.kBdot = Math.pow(10, exp);
+  const mantissa = (sim.cfg.kBdot / Math.pow(10, Math.floor(exp))).toFixed(1);
+  const expInt = Math.floor(exp);
+  document.getElementById('mag-k-val').textContent = `${mantissa}×10${String(expInt).replace(/\d/g, d => '⁰¹²³⁴⁵⁶⁷⁸⁹'[d])}`;
+};
+// Controle de atitude (PD nadir) — mode toggle
+document.querySelectorAll('[data-ctrlmode]').forEach(t => {
+  t.onclick = () => {
+    document.querySelectorAll('[data-ctrlmode]').forEach(x => x.classList.remove('active'));
+    t.classList.add('active');
+    sim.cfg.ctrlMode = t.dataset.ctrlmode;
+  };
+});
+// Kp / Kd / Tmax sliders
+document.getElementById('ctrl-kp').oninput = (e) => {
+  sim.cfg.ctrlKp = parseFloat(e.target.value);
+  document.getElementById('ctrl-kp-val').textContent = sim.cfg.ctrlKp.toFixed(2);
+};
+document.getElementById('ctrl-kd').oninput = (e) => {
+  sim.cfg.ctrlKd = parseFloat(e.target.value);
+  document.getElementById('ctrl-kd-val').textContent = sim.cfg.ctrlKd.toFixed(1);
+};
+document.getElementById('ctrl-tmax').oninput = (e) => {
+  sim.cfg.ctrlTmax = parseFloat(e.target.value);
+  document.getElementById('ctrl-tmax-val').textContent = sim.cfg.ctrlTmax.toFixed(3);
+};
+// view mode toggle
+document.querySelectorAll('#view-mode .vm').forEach(b => {
+  b.onclick = () => {
+    document.querySelectorAll('#view-mode .vm').forEach(x => x.classList.remove('active'));
+    b.classList.add('active');
+    document.getElementById('main-layout').dataset.view = b.dataset.view;
+    // redimensionar canvases após mudança do grid CSS
+    setTimeout(resize, 50);
+    setTimeout(resize, 250);
+  };
+});
+
+// projection toggle (ground track)
+document.querySelectorAll('[data-proj]').forEach(t=>{
+  t.onclick = () => {
+    document.querySelectorAll('[data-proj]').forEach(x=>x.classList.remove('active'));
+    t.classList.add('active');
+    sim.groundProj = t.dataset.proj;
+  };
+});
+// panel config toggle (solar)
+document.querySelectorAll('[data-panelcfg]').forEach(t=>{
+  t.onclick = () => {
+    document.querySelectorAll('[data-panelcfg]').forEach(x=>x.classList.remove('active'));
+    t.classList.add('active');
+    sim.cfg.panelConfig = t.dataset.panelcfg;
+  };
+});
+// clear track
+document.getElementById('btn-clear-track').onclick = () => {
+  sim.groundTrail = [];
+};
+
+// ========== ÉPOCA DE LANÇAMENTO (data/hora UTC) ==========
+// helpers entre input <datetime-local> e sim.epochJD
+function setEpochFromDate(d){
+  // d é Date em UTC — extrair componentes via getUTC*
+  sim.epochJD = calendarToJD(
+    d.getUTCFullYear(), d.getUTCMonth()+1, d.getUTCDate(),
+    d.getUTCHours(), d.getUTCMinutes(), d.getUTCSeconds()
+  );
+}
+function epochJDtoInputValue(jd){
+  // inverso aproximado do calendarToJD — usa Date nativo
+  const unixMs = (jd - 2440587.5) * 86400 * 1000;  // JD → Unix ms
+  const d = new Date(unixMs);
+  // format YYYY-MM-DDTHH:MM (formato datetime-local)
+  const pad = n => String(n).padStart(2,'0');
+  return `${d.getUTCFullYear()}-${pad(d.getUTCMonth()+1)}-${pad(d.getUTCDate())}T${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
+}
+
+const epochInput = document.getElementById('launch-epoch');
+// inicializa input com a época default (hoje 12:00 UTC)
+epochInput.value = epochJDtoInputValue(sim.epochJD);
+
+epochInput.onchange = () => {
+  if(!epochInput.value) return;
+  // datetime-local retorna "YYYY-MM-DDTHH:MM" sem timezone — tratamos como UTC
+  const [datePart, timePart] = epochInput.value.split('T');
+  const [y, mo, d] = datePart.split('-').map(Number);
+  const [h, mi] = timePart.split(':').map(Number);
+  sim.epochJD = calendarToJD(y, mo, d, h, mi, 0);
+};
+
+document.getElementById('btn-epoch-now').onclick = () => {
+  const d = new Date();
+  setEpochFromDate(d);
+  epochInput.value = epochJDtoInputValue(sim.epochJD);
+};
+document.getElementById('btn-epoch-sols-jun').onclick = () => {
+  // solstício de junho 2026 — 21-jun 12:24 UTC
+  sim.epochJD = calendarToJD(2026, 6, 21, 12, 24, 0);
+  epochInput.value = epochJDtoInputValue(sim.epochJD);
+};
+document.getElementById('btn-epoch-sols-dez').onclick = () => {
+  // solstício de dezembro 2026 — 21-dez 15:50 UTC
+  sim.epochJD = calendarToJD(2026, 12, 21, 15, 50, 0);
+  epochInput.value = epochJDtoInputValue(sim.epochJD);
+};
+
+// botões
+document.getElementById('btn-launch').onclick = () => startLaunch();
+document.getElementById('btn-pause').onclick = () => { sim.running = !sim.running; document.getElementById('btn-pause').textContent = sim.running ? 'Pausa' : 'Continuar'; };
+document.getElementById('btn-reset').onclick = () => resetSimulation();
+
+// init
+resize();
+resetSimulation();
+tick();
+
+</script>
+</body>
+</html>
