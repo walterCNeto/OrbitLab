@@ -1,7 +1,5 @@
 # OrbitLab
 
-# OrbitLab
-
 ![OrbitLab](screenshot.png)
 
 **Live demo:** https://waltercneto.github.io/OrbitLab/
