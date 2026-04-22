@@ -2,10 +2,6 @@
 
 ![OrbitLab](screenshot.png)
 
-**Live demo:** https://waltercneto.github.io/OrbitLab/
-
-Browser-based satellite mission simulator...
-
 Browser-based satellite mission simulator built in vanilla JS + Three.js.
 
 **Live demo:** https://walterCNeto.github.io/OrbitLab/
